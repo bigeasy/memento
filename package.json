@@ -3,8 +3,6 @@
 ,   "version":          "0.0.1"
 ,   "author":           "Alan Gutierrez"
 ,   "directories":      { "lib" : "./lib", "bin": "./bin" }
-,   "devDependencies":  { "coffee-script": ">=1.2.0"
-                        , "ace.is.aces.in.my.book": ">=0.0.1" }
-,   "scripts":          { "test": "./bin/ace t/*/*.t.coffee" }
-,   "main":             "./lib/memento"
+,   "devDependencies":  { "proof": "0.0.16" }
+,   "scripts":          { "test": "proof */*/*.t.js" }
 }
