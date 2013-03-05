@@ -3,6 +3,6 @@
 ,   "version":          "0.0.1"
 ,   "author":           "Alan Gutierrez"
 ,   "directories":      { "lib" : "./lib", "bin": "./bin" }
-,   "devDependencies":  { "proof": "0.0.16" }
+,   "devDependencies":  { "proof": "0.0.20" }
 ,   "scripts":          { "test": "proof */*/*.t.js" }
 }
