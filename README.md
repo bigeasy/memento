@@ -26,3 +26,7 @@ store.on('error', function (e) { throw e });
 ```
 
 The directory must be empty.
+
+## Incoming
+
+The database that doesn't forget.
