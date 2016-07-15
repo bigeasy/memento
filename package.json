@@ -22,10 +22,10 @@
     "dependencies":         {},
     "devDependencies":
     {
-                            "proof":                        "0.0.47"
+                            "proof":                        "1.0.x"
     },
     "scripts":
     {
-                            "test": "proof test */*/*.t.js"
+                            "test": "proof test */*.t.js"
     }
 }
