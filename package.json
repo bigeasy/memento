@@ -1,13 +1,31 @@
-{   "name":             "memento"
-,   "description":      "MVCC database for Node.js."
-,   "version":          "0.0.1"
-,   "author":           "Alan Gutierrez"
-,   "directories":      { "lib" : "./lib", "bin": "./bin" }
-,   "devDependencies":  { "proof": "0.0.47" }
-,   "scripts":          { "test": "proof test */*/*.t.js" }
-,   "repository":
+{
+    "name":                 "memento",
+    "version":              "0.0.1",
+    "description":
+
+      "A Paxos backed replicated state machine key-value store.",
+
+    "keywords":
+    [
+                            "paxos", "rsm", "replicated", "state", "machine",
+                            "etcd"
+    ],
+    "author":               "Alan Gutierrez",
+    "homepage":             "http://bigeasy.github.com/cadence",
+    "bugs":                 "http://bigeasy.github.com/cadence/issues",
+    "license":              "MIT",
+    "repository":
     {
-                        "type": "git",
-                        "url": "http://github.com/bigeasy/memento.git"
+                            "type": "git",
+                            "url": "http://github.com/bigeasy/memento.git"
+    },
+    "dependencies":         {},
+    "devDependencies":
+    {
+                            "proof":                        "0.0.47"
+    },
+    "scripts":
+    {
+                            "test": "proof test */*/*.t.js"
     }
 }
