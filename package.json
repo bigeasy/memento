@@ -24,6 +24,7 @@
     {
                             "proof":                        "1.0.x"
     },
+    "main":                 "memento",
     "scripts":
     {
                             "test": "proof test */*.t.js"
