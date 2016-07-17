@@ -1,7 +1,0 @@
-1468553007733 run  t/memento.t.js
-1468553007795 plan t/memento.t.js 1
-1468553007796 test t/memento.t.js ok 1 require
-1468553007796 out  t/memento.t.js # expected 1
-1468553007797 out  t/memento.t.js # passed   1
-1468553007801 exit t/memento.t.js 0 null
-1468553007802 eof  *
