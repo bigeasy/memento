@@ -17,12 +17,6 @@ Memento.prototype._createConference = function (colleague) {
     return conference
 }
 
-Memento.prototype.join = cadence(function (async, bootstrap, colleague, properties) {
-// TODO Have to do this every time, so can it happen automatically? conference.colleague
-    this._colleague = colleague
-    console.log('join', bootstrap)
-})
-
 Memento.prototype._snapshot = function () {
     return []
 }
