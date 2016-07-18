@@ -19,10 +19,29 @@
                             "type": "git",
                             "url": "http://github.com/bigeasy/memento.git"
     },
-    "dependencies":         {},
+    "dependencies":
+    {
+                            "arguable":                     "2.6.x",
+                            "cadence":                      "1.0.x",
+                            "conference":                   "0.0.x",
+                            "inlet":                        "1.2.x",
+                            "server-destroy":               "1.0.1"
+    },
     "devDependencies":
     {
-                            "proof":                        "1.0.x"
+                            "compassion.colleague":         "0.0.x",
+                            "compassion.conduit":           "0.0.x",
+                            "prolific":                     "2.3.x",
+                            "prolific.logger":              "0.0.x",
+                            "prolific.main":                "0.0.x",
+                            "prolific.shuttle":             "2.4.x",
+                            "prolific.monitor":             "2.3.x",
+                            "prolific.stdio":               "0.0.x",
+                            "prolific.stdout.udp":          "0.0.x",
+                            "prolific.syslog":              "0.0.x",
+                            "prolific.udp":                 "0.0.x",
+                            "proof":                        "1.0.x",
+                            "vizsla":                       "1.5.x"
     },
     "main":                 "memento",
     "scripts":
