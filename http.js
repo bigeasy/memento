@@ -33,10 +33,7 @@ Service.prototype.get = cadence(function (async, request, path) {
 
 Service.prototype.delete = cadence(function (async, request, path) {
     var value = request.body.value
-    this._consensus.conference.publish('set', {
-        path: path,
-        value: value
-    }, async())
+    this._consensus.conference.publish('delete', { path: path }, async())
 })
 
 module.exports = Service

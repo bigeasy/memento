@@ -10,39 +10,26 @@ function Memento (colleague) {
 
 Memento.prototype._createConference = function (colleague) {
     var conference = new Conference(colleague, this)
-    conference.join('join')
     conference.immigrate('immigrate')
     conference.receive('set', 'set')
     conference.receive('setIndex', 'setIndex')
     return conference
 }
 
-Memento.prototype._snapshot = function () {
+Memento.prototype.snapshot = function () {
     return []
 }
 
 Memento.prototype.immigrate = cadence(function (async, participantId, properties, promise) {
-    throw new Error
     var communicator = this.conference.cancelable
     async(function () {
         communicator.pause(participantId, async())
     }, function () {
         async.forEach(function (operation) {
             communicator.send('_set', participantId, operation, async())
-        })(this._snapshot())
+        })(this.snapshot())
     }, function () {
         communicator.naturalize(participantId, async())
-    })
-})
-
-Memento.prototype.set = cadence(function (async, set) {
-    async(function () {
-// TODO Could just use broadcast, but RSM means everyone would return same
-// state, so could just use local state, publish means everyone does the same
-// thing when they see it.
-        this.conference.publish('set', set, async())
-    }, function () {
-        return [ true ]
     })
 })
 
