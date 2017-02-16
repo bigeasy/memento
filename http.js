@@ -1,8 +1,8 @@
 var cadence = require('cadence')
 var Dispatcher = require('inlet/dispatcher')
 
-function Service (interface) {
-    this._interface = interface
+function Service (inquisitor) {
+    this._inquisitor = inquisitor
     var dispatcher = new Dispatcher(this)
     dispatcher.dispatch('GET /', 'index')
     dispatcher.dispatch('PUT /v2/keys/(.+)', 'set')
@@ -17,11 +17,11 @@ Service.prototype.index = cadence(function (async) {
 
 Service.prototype.set = cadence(function (async, request, path) {
     var value = request.body.value
-    this._interface.set({ path: path, value: value }, async())
+    this._inquisitor.set({ path: path, value: value }, async())
 })
 
 Service.prototype.get = cadence(function (async, request, path) {
-    var got = this._interface.get(path)
+    var got = this._inquisitor.get(path)
     if (got == null) {
         request.raise(404)
     }
@@ -30,7 +30,7 @@ Service.prototype.get = cadence(function (async, request, path) {
 
 Service.prototype.remove = cadence(function (async, request, path) {
     var value = request.body.value
-    this._interface.remove({ path: path }, async())
+    this._inquisitor.remove({ path: path }, async())
 })
 
 module.exports = Service
