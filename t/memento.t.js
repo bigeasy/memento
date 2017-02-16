@@ -1,6 +1,6 @@
-require('proof')(1, prove)
+require('proof/redux')(1, prove)
 
 function prove (assert) {
-    var Memento = require('..')
-    assert(Memento, 'require')
+    var Participant = require('../participant')
+    assert(Participant, 'require')
 }

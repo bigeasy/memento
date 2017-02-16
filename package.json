@@ -23,16 +23,17 @@
     {
                             "arguable":                     "5.0.x",
                             "cadence":                      "1.0.x",
-                            "conference":                   "0.2.x",
+                            "colleague":                    "0.0.8",
+                            "conference":                   "0.3.x",
+                            "destructible":                 "0.0.2",
                             "inlet":                        "2.0.x",
+                            "prolific.logger":              "3.0.x",
+                            "prolific.shuttle":             "9.0.x",
                             "server-destroy":               "1.0.1"
     },
     "devDependencies":
     {
                             "compassion.colleague":         "0.5.x",
-                            "compassion.conduit":           "0.4.x",
-                            "prolific.shuttle":             "9.0.x",
-                            "prolific.logger":              "3.0.x",
                             "proof":                        "1.2.x",
                             "vizsla":                       "2.0.x"
     },
