@@ -10,11 +10,12 @@ function Memento (cliffhanger, nodes) {
 }
 
 Memento.prototype.bootstrap = cadence(function (async, conference) {
-    conference.ifNotReplaying(async)(function (recorder) {
+    console.log('bootstrapping')
+    conference.ifNotReplaying(async)(function () {
         async(function () {
             crypto.randomBytes(16, async())
         }, function (buffer) {
-            conference.invoke('catalog', buffer.toString('hex'), async())
+            conference.record('catalog', buffer.toString('hex'), async())
         })
     })
 })
@@ -33,6 +34,14 @@ Memento.prototype.join = cadence(function (async, conference) {
 })
 
 Memento.prototype.immigrate = cadence(function (async, conference) {
+    conference.makeWelcome({
+        nodes: JSON.parse(JSON.stringify(this._nodes)),
+        index: this._index
+    })
+})
+
+Memento.prototype.store = cadence(function (async, promise, id) {
+    return conference.getWelcome(promise)
 })
 
 Memento.prototype.set = cadence(function (async, conference, envelope) {
@@ -44,20 +53,23 @@ Memento.prototype.set = cadence(function (async, conference, envelope) {
     }
     this._index++
     if (envelope.from == this.paxos.id) {
-        this._cliffhanger.resolve(envelope.cookie, [null, { action: 'set', node: node }])
+        this._cliffhanger.resolve(envelope.cookie, [ null, { action: 'set', node: node }])
     }
 })
 
 Memento.prototype.delete = cadence(function (async, set) {
     var node = this.nodes[set.path]
-    return {
-        action: 'delete',
-        node: {
-            createdIndex: node.createdIndex,
-            key: node.key,
-            modifiedIndex: this._index++
-        },
-        prevNode: node
+    if (envelope.from == this.paxos.id) {
+        var result = {
+            action: 'delete',
+            node: {
+                createdIndex: node.createdIndex,
+                key: node.key,
+                modifiedIndex: this._index++
+            },
+            prevNode: node
+        }
+        this._cliffhanger.resolve(envelope.cookie, [ null, result ])
     }
 })
 
