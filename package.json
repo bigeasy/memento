@@ -21,20 +21,20 @@
     },
     "dependencies":
     {
-                            "arguable":                     "2.6.x",
+                            "arguable":                     "5.0.x",
                             "cadence":                      "1.0.x",
-                            "conference":                   "0.0.x",
-                            "inlet":                        "1.2.x",
+                            "conference":                   "0.2.x",
+                            "inlet":                        "2.0.x",
                             "server-destroy":               "1.0.1"
     },
     "devDependencies":
     {
-                            "compassion.colleague":         "0.0.x",
-                            "compassion.conduit":           "0.0.x",
-                            "prolific":                     "5.0.x",
-                            "prolific.logger":              "2.0.x",
-                            "proof":                        "1.0.x",
-                            "vizsla":                       "1.5.x"
+                            "compassion.colleague":         "0.5.x",
+                            "compassion.conduit":           "0.4.x",
+                            "prolific.shuttle":             "9.0.x",
+                            "prolific.logger":              "3.0.x",
+                            "proof":                        "1.2.x",
+                            "vizsla":                       "2.0.x"
     },
     "main":                 "memento",
     "scripts":
