@@ -35,7 +35,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var Destructor = require('destructible')
 
     var Memento = require('./memento')
-    var Inquistor = require('./interface')
+    var Inquisitor = require('./inquisitor')
     var Service = require('./http')
     var Cliffhanger = require('cliffhanger')
     var Colleague = require('colleague')
@@ -67,7 +67,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     colleague.spigot.emptyInto(conference.basin)
     conference.spigot.emptyInto(colleague.basin)
 
-    var inquistor = new Inquistor(conference, cliffhanger, nodes)
+    var inquisitor = new Inquisitor(conference, cliffhanger, nodes)
 
     destructor.async(async, 'collegue')(function () {
         destructor.addDestructor('collegue', colleague.destroy.bind(colleague))

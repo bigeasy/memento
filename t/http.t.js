@@ -3,14 +3,8 @@ require('proof')(1, require('cadence')(prove))
 function prove (async, assert) {
     var Service = require('../http')
     var service = new Service({
-        conference: {
-            publish: function (method, parameters, callback) {
-                switch (method) {
-                case 'set':
-                    callback(null, { action: 'set', value: 'Hello world' } )
-                    break
-                }
-            }
+        set: function (envelope, callback) {
+            callback(null, { action: 'set', value: 'Hello world' } )
         }
     })
     var UserAgent = require('vizsla')
