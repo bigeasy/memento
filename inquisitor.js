@@ -1,3 +1,5 @@
+var cadence = require('cadence')
+
 function Inquistor (conference, cliffhanger, nodes) {
     this._conference = conference
     this._cliffhanger = cliffhanger

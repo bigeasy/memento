@@ -74,7 +74,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
         colleague.connect(program, async())
     })
 
-    var service = new Service(inquistor)
+    var service = new Service(inquisitor)
     var destroyer = require('server-destroy')
 
     var bind = program.ultimate.bind
@@ -82,7 +82,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     destroyer(server)
 
     server.listen(bind.port, bind.address, async())
-    destructor.addDestructor('server', server.destroy.bind(server))
+    destructor.addDestructor('http', server.destroy.bind(server))
 
     logger.info('started', { params: program.ultimate, argv: program.argv })
 }))
