@@ -10,19 +10,23 @@ function Memento (cliffhanger, nodes) {
     this._stores = {}
 }
 
+Memento.prototype.test = cadence(function (async, conference, body) {
+    console.log('GOT TEST', body)
+})
+
 Memento.prototype.join = cadence(function (async, conference) {
     async(function () {
         conference.record_(async)(function () {
             conference.request('store', { promise: conference.government.promise }, async())
         })
     }, function (store) {
-        this._nodes = store.nodes
+        for (var path in store.nodes) {
+            this._nodes[path] = store.nodes[path]
+        }
         this._index = store.index
     })
 })
 
-// Actually, let's just have a naturalize event. Ah, no, because we may
-// naturalize or else we may exile before we naturalize.
 Memento.prototype.immigrate = cadence(function (async, conference, id) {
     this._stores[conference.government.promise] = {
         nodes: JSON.parse(JSON.stringify(this._nodes)),
@@ -47,6 +51,7 @@ Memento.prototype.store = cadence(function (async, conference, body) {
 })
 
 Memento.prototype.set = cadence(function (async, conference, envelope) {
+    console.log(envelope)
     var node = this._nodes[envelope.body.path] = {
         value: envelope.body.value,
         key: envelope.body.path,
@@ -54,7 +59,8 @@ Memento.prototype.set = cadence(function (async, conference, envelope) {
         modifiedIndex: this._index
     }
     this._index++
-    if (envelope.from == this.paxos.id) {
+    if (envelope.from == conference.id) {
+        console.log('RESOLVING!')
         this._cliffhanger.resolve(envelope.cookie, [ null, { action: 'set', node: node }])
     }
 })

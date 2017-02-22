@@ -61,6 +61,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
         constructor.immigrate()
         constructor.naturalize()
         constructor.exile()
+        constructor.catalog('test')
         constructor.request('store')
         constructor.receive('set')
         constructor.receive('delete', 'remove')

@@ -29,6 +29,7 @@ Service.prototype.get = cadence(function (async, request, path) {
 })
 
 Service.prototype.remove = cadence(function (async, request, path) {
+    console.log(request.body)
     var value = request.body.value
     this._inquisitor.remove({ path: path }, async())
 })
