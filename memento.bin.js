@@ -56,7 +56,6 @@ require('arguable')(module, require('cadence')(function (async, program) {
     destructor.addDestructor('shuttle', shuttle.close.bind(shuttle))
 
     var conference = new Conference(memento, function (constructor) {
-        constructor.bootstrap()
         constructor.join()
         constructor.immigrate()
         constructor.naturalize()
