@@ -8,6 +8,7 @@ function Service (inquisitor) {
     dispatcher.dispatch('PUT /v2/keys/(.+)', 'set')
     dispatcher.dispatch('GET /v2/keys/(.+)', 'get')
     dispatcher.dispatch('DELETE /v2/keys/(.+)', 'remove')
+    dispatcher.dispatch('GET /health', 'health')
     this.dispatcher = dispatcher
 }
 
@@ -32,6 +33,10 @@ Service.prototype.remove = cadence(function (async, request, path) {
     console.log(request.body)
     var value = request.body.value
     this._inquisitor.remove({ path: path }, async())
+})
+
+Service.prototype.health = cadence(function () {
+    return { government: this._inquisitor.conference.government }
 })
 
 module.exports = Service

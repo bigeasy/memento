@@ -1,0 +1,13 @@
+Because `etcd` is acutally kind of simple, I'm using it to develop and diagnose
+problems with Compassion. Development of Paxos itself is done in unit testing.
+
+Development here is towards an atomic log framework.
+
+Good to use `npm link` to link to...
+
+ * `compassion.channel`
+ * `compassion.colleague`
+ * `colleague`
+ * `conference`
+
+And in `compassion.channel` you should `npm link` to `compassion.colleague`.

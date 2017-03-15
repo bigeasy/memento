@@ -1,7 +1,0 @@
-grep 'compassion.colleague#recorded' colleague.txt > recorded.txt
-node_modules/.bin/wafer  parse --syslog < recorded.txt > recorded.json
-bash run/channel.sh | grep 'compassion.channel#recorded' >  replayed.txt
-grep -v ' source=colleague;' recorded.txt > paxos.txt
-prolific stdio syslog --serializer wafer node conduit.bin.js --bind 127.0.0.1:8486
-prolific stdio syslog --serializer wafer node chaperon.bin.js --mingle http://127.0.0.1:8686/discover --conduit http://%s/health --colleague http://%s%s/health --bind 8286
-prolific stdio syslog --serializer wafer mingle static --bind 127.0.0.1:8686 127.0.0.1:8486

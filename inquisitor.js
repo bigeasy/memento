@@ -1,18 +1,18 @@
 var cadence = require('cadence')
 
 function Inquistor (conference, cliffhanger, nodes) {
-    this._conference = conference
+    this.conference = conference
     this._cliffhanger = cliffhanger
     this._nodes = nodes
 }
 
 Inquistor.prototype.set = cadence(function (async, set) {
     async(function () {
-        this._conference.record('test', {}, async())
+        this.conference.invoke('test', {}, async())
     }, function () {
-        this._conference.broadcast('set', {
+        this.conference.broadcast('set', {
             cookie: this._cliffhanger.invoke(async()),
-            from: this._conference.id,
+            from: this.conference.id,
             body: set
         })
     })

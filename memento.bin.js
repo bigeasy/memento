@@ -60,16 +60,13 @@ require('arguable')(module, require('cadence')(function (async, program) {
         constructor.immigrate()
         constructor.naturalize()
         constructor.exile()
-        constructor.catalog('test')
-        constructor.request('store')
+        constructor.method('test')
+        constructor.socket()
         constructor.receive('set')
         constructor.receive('delete', 'remove')
     })
 
-    var colleague = new Colleague
-
-    colleague.spigot.emptyInto(conference.basin)
-    conference.spigot.emptyInto(colleague.basin)
+    var colleague = new Colleague(conference)
 
     var inquisitor = new Inquisitor(conference, cliffhanger, nodes)
 
