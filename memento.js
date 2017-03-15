@@ -61,7 +61,7 @@ Memento.prototype.naturalize = cadence(function (async, conference, promise) {
 })
 
 Memento.prototype.exile = cadence(function (async, conference, id) {
-    this._clearStore(conference.government.exile.promise)
+    delete this._stores[conference.government.exile.promise]
 })
 
 Memento.prototype._socket = cadence(function (async, socket, header) {
