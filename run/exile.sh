@@ -1,6 +1,6 @@
 source run/functions.sh
 
-QUIET=1
+QUIET=0
 
 run_denizen 1
 
@@ -11,18 +11,7 @@ while tmux_run_is_running; do
     sleep 1
 done
 
-#curl -s http://127.0.0.1:8081/health | jq '.'
-
 run_denizen 2
-
-while tmux_run_is_running; do
-    promise=$(curl -s http://127.0.0.1:8082/health | jq -r '.government.promise')
-    [ "$promise" = "2/0" ] && break
-    sleep 1
-done
-
-#curl -s http://127.0.0.1:8082/health | jq '.'
-
 run_denizen 3
 
 while tmux_run_is_running; do
@@ -33,3 +22,8 @@ done
 
 echo "------------ DONE $promise ------------"
 curl -s http://127.0.0.1:8083/health | jq '.'
+
+
+for i in {0..10}; do
+    curl -s -X PUT -d value=$1 127.0.0.1:8083/v2/keys/key-$i
+done
