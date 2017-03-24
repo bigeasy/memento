@@ -1,7 +1,7 @@
 require('proof')(1, require('cadence')(prove))
 
 function prove (async, assert) {
-    var Service = require('../http')
+    var Service = require('../middleware')
     var service = new Service({
         set: function (envelope, callback) {
             callback(null, { action: 'set', value: 'Hello world' } )
