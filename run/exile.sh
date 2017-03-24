@@ -2,7 +2,7 @@ source run/functions.sh
 
 QUIET=0
 
-run_denizen 1
+run_denizen 1 &
 
 while tmux_run_is_running; do
     promise=$(curl -s http://127.0.0.1:8081/health | jq -r '.government.promise')
@@ -11,8 +11,8 @@ while tmux_run_is_running; do
     sleep 1
 done
 
-run_denizen 2
-run_denizen 3
+run_denizen 2 &
+run_denizen 3 &
 
 while tmux_run_is_running; do
     promise=$(curl -s http://127.0.0.1:8083/health | jq -r '.government.promise')

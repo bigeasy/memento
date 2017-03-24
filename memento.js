@@ -4,12 +4,14 @@ var logger = require('prolific.logger').createLogger('memento')
 var crypto = require('crypto')
 var abend = require('abend')
 var assert = require('assert')
+var Cubbyhole = require('cubbyhole')
 
 function Memento (cliffhanger, nodes) {
     this._nodes = nodes
     this._index = 0
     this._cliffhanger = cliffhanger
     this._stores = {}
+    this._cubbyholes = new Cubbyhole
 }
 
 Memento.prototype.test = cadence(function (async, conference, body) {
@@ -50,27 +52,30 @@ Memento.prototype.join = cadence(function (async, conference) {
 })
 
 Memento.prototype.immigrate = cadence(function (async, conference, id) {
-    this._stores[conference.government.promise] = {
+    this._cubbyholes.set(conference.government.promise, null, {
         nodes: JSON.parse(JSON.stringify(this._nodes)),
         index: this._index
-    }
+    })
 })
 
 Memento.prototype.naturalize = cadence(function (async, conference, promise) {
-    delete this._stores[promise]
+    delete this._cubbyholes.remove(promise)
 })
 
 Memento.prototype.exile = cadence(function (async, conference, id) {
-    delete this._stores[conference.government.exile.promise]
+    this._cubbys.remove(conference.government.exile.promise)
 })
 
 Memento.prototype._socket = cadence(function (async, socket, header) {
     var shifter = socket.read.shifter()
     async(function () {
+        console.log('dequeuing')
         shifter.dequeue(async())
     }, function (envelope) {
+        console.log('dequeued')
         assert(envelope == null, 'there should be no message body')
-        var store = this._stores[header.promise]
+       this._cubbyholes.wait(header.promise, async())
+    }, function (store) {
         socket.write.push({
             module: 'addendum',
             method: 'index',
