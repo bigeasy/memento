@@ -36,7 +36,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
 
     var Memento = require('./memento')
     var Inquisitor = require('./inquisitor')
-    var Service = require('./http')
+    var Service = require('./middleware')
     var Cliffhanger = require('cliffhanger')
     var Colleague = require('colleague')
 
@@ -79,7 +79,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var destroyer = require('server-destroy')
 
     var bind = program.ultimate.bind
-    var server = http.createServer(service.dispatcher.createWrappedDispatcher())
+    var server = http.createServer(service.reactor.createMiddleware())
     destroyer(server)
 
     server.listen(bind.port, bind.address, async())

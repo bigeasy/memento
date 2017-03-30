@@ -1,15 +1,15 @@
 var cadence = require('cadence')
-var Dispatcher = require('inlet/dispatcher')
+var Reactor = require('reactor')
 
 function Service (inquisitor) {
     this._inquisitor = inquisitor
-    var dispatcher = new Dispatcher(this)
-    dispatcher.dispatch('GET /', 'index')
-    dispatcher.dispatch('PUT /v2/keys/(.+)', 'set')
-    dispatcher.dispatch('GET /v2/keys/(.+)', 'get')
-    dispatcher.dispatch('DELETE /v2/keys/(.+)', 'remove')
-    dispatcher.dispatch('GET /health', 'health')
-    this.dispatcher = dispatcher
+    this.reactor = new Reactor(this, function (dispatcher) {
+        dispatcher.dispatch('GET /', 'index')
+        dispatcher.dispatch('PUT /v2/keys/(.+)', 'set')
+        dispatcher.dispatch('GET /v2/keys/(.+)', 'get')
+        dispatcher.dispatch('DELETE /v2/keys/(.+)', 'remove')
+        dispatcher.dispatch('GET /health', 'health')
+    })
 }
 
 Service.prototype.index = cadence(function (async) {

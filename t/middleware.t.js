@@ -8,7 +8,7 @@ function prove (async, assert) {
         }
     })
     var UserAgent = require('vizsla')
-    var ua = new UserAgent(service.dispatcher.createWrappedDispatcher())
+    var ua = new UserAgent(service.reactor.createMiddleware())
     async(function () {
         service.set({
             body: {
