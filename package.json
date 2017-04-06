@@ -37,7 +37,7 @@
     {
                             "compassion.colleague":         "0.6.x",
                             "proof":                        "3.0.x",
-                            "vizsla":                       "3.0.0"
+                            "vizsla":                       "3.4.0"
     },
     "main":                 "memento",
     "scripts":
