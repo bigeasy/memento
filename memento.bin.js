@@ -58,7 +58,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var conference = new Conference(memento, function (constructor) {
         constructor.join()
         constructor.immigrate()
-        constructor.naturalize()
+        constructor.naturalized()
         constructor.exile()
         constructor.method('test')
         constructor.socket()

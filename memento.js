@@ -58,7 +58,7 @@ Memento.prototype.immigrate = cadence(function (async, conference, id) {
     })
 })
 
-Memento.prototype.naturalize = cadence(function (async, conference, promise) {
+Memento.prototype.naturalized = cadence(function (async, conference, promise) {
     delete this._cubbyholes.remove(promise)
 })
 
