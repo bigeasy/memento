@@ -35,7 +35,7 @@
     },
     "devDependencies":
     {
-                            "compassion.colleague":         "0.6.x",
+                            "compassion.colleague":         "0.7.x",
                             "proof":                        "3.0.x",
                             "vizsla":                       "3.4.0"
     },
