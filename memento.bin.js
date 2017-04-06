@@ -79,7 +79,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var destroyer = require('server-destroy')
 
     var bind = program.ultimate.bind
-    var server = http.createServer(service.reactor.createMiddleware())
+    var server = http.createServer(service.reactor.middleware)
     destroyer(server)
 
     server.listen(bind.port, bind.address, async())
