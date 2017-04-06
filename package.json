@@ -36,7 +36,7 @@
     "devDependencies":
     {
                             "compassion.colleague":         "0.6.x",
-                            "proof":                        "1.2.x",
+                            "proof":                        "3.0.x",
                             "vizsla":                       "3.0.0"
     },
     "main":                 "memento",
