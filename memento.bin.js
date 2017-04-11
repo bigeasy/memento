@@ -53,7 +53,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
 
     process.on('shutdown', destructor.destroy.bind(destructor))
 
-    destructor.addDestructor('shuttle', shuttle.close.bind(shuttle))
+    destructor.addDestructor('shuttle', shuttle, 'close')
 
     var conference = new Conference(memento, function (constructor) {
         constructor.join()
@@ -70,20 +70,35 @@ require('arguable')(module, require('cadence')(function (async, program) {
 
     var inquisitor = new Inquisitor(conference, cliffhanger, nodes)
 
-    destructor.async(async, 'collegue')(function () {
+    destructor.async(async, 'collegue')(function (ready) {
         destructor.addDestructor('collegue', colleague.destroy.bind(colleague))
         colleague.connect(program, async())
+        ready.unlatch()
     })
 
-    var service = new Service(inquisitor)
-    var destroyer = require('server-destroy')
+    destructor.async(async, 'collegue')(function (ready) {
+        var service = new Service(inquisitor)
+        })
+        var destroyer = require('server-destroy')
 
-    var bind = program.ultimate.bind
-    var server = http.createServer(service.reactor.middleware)
-    destroyer(server)
+        var bind = program.ultimate.bind
+        var server = http.createServer(service.reactor.middleware)
+        destroyer(server)
 
-    server.listen(bind.port, bind.address, async())
-    destructor.addDestructor('http', server.destroy.bind(server))
+        destructor.addDestructor('http', server.destroy.bind(server))
 
-    logger.info('started', { params: program.ultimate, argv: program.argv })
+        async(function () {
+            server.listen(bind.port, bind.address, async())
+        }, function () {
+            ready.unlatch()
+        })
+    })
+
+    async(function () {
+        destructor.ready(async())
+    }, function () {
+        logger.info('started', { params: program.ultimate, argv: program.argv })
+    })
+
+    program.ready = destructor.ready
 }))
