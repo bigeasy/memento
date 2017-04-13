@@ -1,0 +1,10 @@
+#!/bin/bash
+
+sleep 5
+
+source $(dirname $(readlink -f $0))/../functions.bash
+
+prolific \
+    udp://127.0.0.1:514 \
+-- \
+compassion conduit --bind 8486

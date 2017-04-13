@@ -1,0 +1,7 @@
+npm install \
+    prolific \
+    prolific.tcp \
+    prolific.udp \
+    wafer \
+    compassion \
+    compassion.conduit
