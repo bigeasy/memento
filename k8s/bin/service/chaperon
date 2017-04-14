@@ -1,0 +1,11 @@
+#!/bin/bash
+
+source $(dirname $(readlink -f $0))/../functions.bash
+
+wait_for_container logger 3
+wait_for_http_ok 8686 /health
+
+prolific \
+    udp://127.0.0.1:514 \
+-- \
+compassion conduit --bind 8286

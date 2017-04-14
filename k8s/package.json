@@ -23,8 +23,10 @@
     "dependencies":
     {
                             "memento":                      "file:..",
-                            "prolific":                     "7.2.*",
-                            "prolific.stdio":               "1.1.*",
+                            "mingle":                       "0.2.x",
+                            "mingle.kubernetes":            "0.1.x",
+                            "prolific":                     "7.2.x",
+                            "prolific.stdio":               "1.1.x",
                             "prolific.syslog":              "1.2.x",
                             "prolific.tcp":                 "3.0.x",
                             "prolific.udp":                 "1.2.x",

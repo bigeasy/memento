@@ -25,20 +25,12 @@ function k8s_get_pod () {
         "https://$authority/api/v1/namespaces/$namespace/pods/$HOSTNAME"
 }
 
-function wait_for_endpoint () {
+function wait_for_http_ok () {
     local port=$1 path=$2
-    while ! curl -s "http://12.0.0.1:$port$path"; do
+    while ! curl -sS "http://127.0.0.1:$port$path"; do
         sleep 1
     done
     echo "$port $path is ready"
-}
-
-function wait_for_health_endpoint () {
-    local port=$1
-    while ! curl -s "http://127.0.0.1:$port/health"; do
-        sleep 1
-    done
-    echo "$port is ready"
 }
 
 function wait_for_container () {
