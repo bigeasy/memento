@@ -47,6 +47,26 @@ console.log(JSON.stringify({
                         mountPath: '/tmp', name: 'rw', subPath: 'tmp/logger'
                     }]
                 }, {
+                    name: 'discovery',
+                    image: 'homeport/image-addendum:latest',
+                    imagePullPolicy: 'Never',
+                    command: [ '/usr/local/bin/service/discovery' ],
+                    volumeMounts: [{
+                        mountPath: '/run', name: 'rw', subPath: 'run/logger'
+                    }, {
+                        mountPath: '/tmp', name: 'rw', subPath: 'tmp/logger'
+                    }]
+                }, {
+                    name: 'chaperon',
+                    image: 'homeport/image-addendum:latest',
+                    imagePullPolicy: 'Never',
+                    command: [ '/usr/local/bin/service/chaperon' ],
+                    volumeMounts: [{
+                        mountPath: '/run', name: 'rw', subPath: 'run/logger'
+                    }, {
+                        mountPath: '/tmp', name: 'rw', subPath: 'tmp/logger'
+                    }]
+                }, {
                     name: 'conduit',
                     image: 'homeport/image-addendum:latest',
                     imagePullPolicy: 'Never',
