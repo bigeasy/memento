@@ -1,30 +1,31 @@
 #!/bin/bash
 
-addendum_started_at=$(date '+%s')
-
-pushd $(dirname $(readlink -f ${BASH_SOURCE[0]}))/.. > /dev/null
+pushd $(dirname $(readlink -f ${BASH_SOURCE[0]}))/../.. > /dev/null
 addendum_directory=$PWD
 popd > /dev/null
 
+executable_started_at=$(date '+%s')
+container_name=$(basename ${BASH_SOURCE[1]})
+
 export PATH=$PATH:$addendum_directory/node_modules/.bin
 
-function addendum_abend () {
+function abend () {
     local message=$1
     echo "$message" 1>&2
     exit 1
 }
 
-function addendum_k8s_get_pod () {
+function k8s_get_pod () {
     namespace=$(</var/run/secrets/kubernetes.io/serviceaccount/namespace)
     token=$(</var/run/secrets/kubernetes.io/serviceaccount/token)
     authority=$KUBERNETES_SERVICE_HOST:$KUBERNETES_PORT_443_TCP_PORT
     curl \
         -sS -H "Authorization: Bearer $token" \
         --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
-        "https://$authority/api/v1/namespaces/$namespace/pods/$NAMESPACE"
+        "https://$authority/api/v1/namespaces/$namespace/pods/$HOSTNAME"
 }
 
-function addendum_wait_for_endpoint () {
+function wait_for_endpoint () {
     local port=$1 path=$2
     while ! curl -s "http://12.0.0.1:$port$path"; do
         sleep 1
@@ -32,7 +33,7 @@ function addendum_wait_for_endpoint () {
     echo "$port $path is ready"
 }
 
-function addendum_wait_for_health_endpoint () {
+function wait_for_health_endpoint () {
     local port=$1
     while ! curl -s "http://127.0.0.1:$port/health"; do
         sleep 1
@@ -40,40 +41,50 @@ function addendum_wait_for_health_endpoint () {
     echo "$port is ready"
 }
 
-function addendum_wait_for_container () {
-    local container=$1 uptime=$2
+function wait_for_container () {
+    local wait_for_container_name=$1 uptime=$2
     if [[ -z "$uptime" ]]; then
         uptime=0
     fi
     while true; do
-        pod=$(addendum_k8s_get_pod)
-        ready=$(echo "$pod" | jq --arg container -r '
-            .items[0].status.containerStatuses[] |
+        pod=$(k8s_get_pod)
+        echo "$wait_for_container_name"
+        ready=$(echo "$pod" | jq --arg container "$wait_for_container_name" -r '
+            .status.containerStatuses[] |
             select(.name == $container) |
-            .state.running.startedAt
+            .ready
         ')
+        echo "$pod" | jq --arg container "$wait_for_container_name" -r '
+            .status.containerStatuses[] |
+            select(.name == $container)
+        '
         if [[ "$ready" = "true" ]]; then
-            started=$(echo "$pod" | jq --arg container $container -r '
-                .items[0].status.containerStatuses[] |
+            echo "$pod" | jq --arg container "$container_name" '
+                .status.containerStatuses[] |
+                select(.name == $container)
+            '
+            echo "container_name => $container_name"
+            container_started_at=$(echo "$pod" | jq --arg container "$container_name" -r '
+                .status.containerStatuses[] |
                 select(.name == $container) |
                 .state.running.startedAt
             ')
-            duration=$(( $(date +%s) - $(date -d "$started" +%s) ))
-            duration=$(( $duration - $addendum_clock_skew ))
-            echo "$container $ready $started $duration $addendum_clock_skew"
+            echo "k8s_started_at $k8s_started_at"
+            wait_for_started_at=$(echo "$pod" | jq --arg container "$wait_for_container_name" -r '
+                .status.containerStatuses[] |
+                select(.name == $container) |
+                .state.running.startedAt
+            ')
+            echo "container_started_at $container_started_at"
+            echo "executable_started_at $executable_started_at"
+            echo "wait_for_started_at $wait_for_started_at"
+            clock_skew=$(( $executable_started_at - $(date -d "$container_started_at" +%s) ))
+            duration=$(( $(date +%s) - $(date -d "$wait_for_started_at" +%s) ))
+            echo "before clock skew applied $duration $clock_skew $uptime"
+            duration=$(( $duration - $clock_skew ))
+            echo "after clock skew applied $duration $clock_skew $uptime"
             [[ $duration -ge "$uptime" ]] && break
         fi
         sleep 1
     done
 }
-
-echo "$addendum_started_at $k8s_started_at"
-echo "$(date -d @$addendum_started_at) $k8s_started_at"
-echo "$pod" | jq --arg container logger -r '
-    .items[0].status.containerStatuses[] |
-    select(.name == $container) |
-    .state.running.startedAt
-'
-
-addendum_clock_skew=$(( $addendum_started_at - $(date -d "$k8s_started_at" +%s) ))
-echo "addendum clock skew"
