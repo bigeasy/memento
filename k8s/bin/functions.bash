@@ -7,7 +7,7 @@ popd > /dev/null
 executable_started_at=$(date '+%s')
 container_name=$(basename ${BASH_SOURCE[1]})
 
-export PATH=$PATH:$addendum_directory/node_modules/.bin
+export PATH=$PATH:$addendum_directory/k8s/node_modules/.bin
 
 function abend () {
     local message=$1
