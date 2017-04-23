@@ -5,6 +5,7 @@ QUIET=1
 run_denizen 1
 
 while tmux_run_is_running; do
+    curl -sS http://127.0.0.1:8081/health | jq -r '.'
     promise=$(curl -s http://127.0.0.1:8081/health | jq -r '.government.promise')
     echo "$promise"
     [ "$promise" = "1/0" ] && break

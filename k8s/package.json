@@ -25,13 +25,16 @@
                             "memento":                      "file:..",
                             "mingle":                       "0.2.x",
                             "mingle.kubernetes":            "0.1.x",
+                            "mingle.static":                "0.2.x",
+                            "chaperon":                     "0.5.x",
                             "prolific":                     "7.2.x",
                             "prolific.stdio":               "1.1.x",
                             "prolific.syslog":              "1.2.x",
                             "prolific.tcp":                 "3.0.x",
                             "prolific.udp":                 "1.2.x",
                             "compassion.conduit":           "0.5.x",
-                            "compassion":           "0.1.x"
+                            "compassion":                   "0.1.x",
+                            "wafer":                        "4.0.x"
     },
     "devDependencies":
     {

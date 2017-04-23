@@ -52,6 +52,7 @@ Memento.prototype.join = cadence(function (async, conference) {
 })
 
 Memento.prototype.immigrate = cadence(function (async, conference, id) {
+    console.log('IMMIGRATE', id)
     this._cubbyholes.set(conference.government.promise, null, {
         nodes: JSON.parse(JSON.stringify(this._nodes)),
         index: this._index

@@ -26,6 +26,8 @@ require('arguable')(module, require('cadence')(function (async, program) {
     program.validate(require('arguable/bindable'), 'bind')
 
     var http = require('http')
+    var cadence = require('cadence')
+    var abend = require('abend')
 
     var Shuttle = require('prolific.shuttle')
 
@@ -40,20 +42,17 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var Cliffhanger = require('cliffhanger')
     var Colleague = require('colleague')
 
-    var nodes = {}
-    var cliffhanger = new Cliffhanger
-
-    var memento = new Memento(cliffhanger, nodes)
-
-    var logger = require('prolific.logger').createLogger('memento')
-
-    var shuttle = Shuttle.shuttle(program, logger)
-
     var destructor = new Destructor('memento')
 
     process.on('shutdown', destructor.destroy.bind(destructor))
 
+    var logger = require('prolific.logger').createLogger('memento')
+    var shuttle = Shuttle.shuttle(program, logger)
     destructor.addDestructor('shuttle', shuttle, 'close')
+
+    var nodes = {}
+    var cliffhanger = new Cliffhanger
+    var memento = new Memento(cliffhanger, nodes)
 
     var conference = new Conference(memento, function (constructor) {
         constructor.join()
@@ -70,35 +69,28 @@ require('arguable')(module, require('cadence')(function (async, program) {
 
     var inquisitor = new Inquisitor(conference, cliffhanger, nodes)
 
-    destructor.async(async, 'collegue')(function (ready) {
-        destructor.addDestructor('collegue', colleague.destroy.bind(colleague))
-        colleague.connect(program, async())
-        ready.unlatch()
-    })
-
-    destructor.async(async, 'collegue')(function (ready) {
-        var service = new Service(inquisitor)
+    cadence(function (async) {
+        destructor.stack(async, 'collegue')(function (ready) {
+            destructor.addDestructor('collegue', colleague, 'destroy')
+            colleague.listen(program, async())
+            colleague.ready.wait(ready, 'unlatch')
         })
-        var destroyer = require('server-destroy')
 
-        var bind = program.ultimate.bind
-        var server = http.createServer(service.reactor.middleware)
-        destroyer(server)
+    })(abend)
 
-        destructor.addDestructor('http', server.destroy.bind(server))
+    var service = new Service(inquisitor)
+    var destroyer = require('server-destroy')
 
-        async(function () {
-            server.listen(bind.port, bind.address, async())
-        }, function () {
-            ready.unlatch()
-        })
-    })
+    var bind = program.ultimate.bind
+    var server = http.createServer(service.reactor.middleware)
+    destroyer(server)
+
+    destructor.addDestructor('http', server, 'destroy')
 
     async(function () {
-        destructor.ready(async())
+        destructor.ready.wait(async())
+        server.listen(bind.port, bind.address, async())
     }, function () {
         logger.info('started', { params: program.ultimate, argv: program.argv })
     })
-
-    program.ready = destructor.ready
 }))
