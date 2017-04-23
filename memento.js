@@ -27,7 +27,7 @@ Memento.prototype.join = cadence(function (async, conference) {
             shifter = socket.read.shifter()
         }
         async(function () {
-            conference.record_(async)(function () {
+            conference.record(async)(function () {
                 shifter.dequeue(async())
             })
         }, function (envelope) {
@@ -36,7 +36,7 @@ Memento.prototype.join = cadence(function (async, conference) {
             this._index = envelope.body
         })
         var loop = async(function () {
-            conference.record_(async)(function () {
+            conference.record(async)(function () {
                 shifter.dequeue(async())
             })
         }, function (envelope) {
