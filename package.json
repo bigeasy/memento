@@ -22,7 +22,7 @@
     "dependencies":
     {
                             "abend":                        "1.0.x",
-                            "arguable":                     "5.0.x",
+                            "arguable":                     "5.2.x",
                             "cadence":                      "1.0.x",
                             "colleague":                    "0.5.x",
                             "conference":                   "0.6.x",
