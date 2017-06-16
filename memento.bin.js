@@ -34,7 +34,7 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var Colleague = require('colleague')
     var Conference = require('conference')
 
-    var Destructor = require('destructible')
+    var Destructible = require('destructible')
 
     var Memento = require('./memento')
     var Inquisitor = require('./inquisitor')
@@ -42,13 +42,15 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var Cliffhanger = require('cliffhanger')
     var Colleague = require('colleague')
 
-    var destructor = new Destructor('memento')
+    var Thereafter = require('thereafter')
 
-    process.on('shutdown', destructor.destroy.bind(destructor))
+    var destructible = new Destructible('memento')
+
+    process.on('shutdown', destructible.destroy.bind(destructible))
 
     var logger = require('prolific.logger').createLogger('memento')
     var shuttle = Shuttle.shuttle(program, logger)
-    destructor.addDestructor('shuttle', shuttle, 'close')
+    destructible.addDestructor('shuttle', shuttle, 'close')
 
     var nodes = {}
     var cliffhanger = new Cliffhanger
@@ -69,14 +71,14 @@ require('arguable')(module, require('cadence')(function (async, program) {
 
     var inquisitor = new Inquisitor(conference, cliffhanger, nodes)
 
-    cadence(function (async) {
-        destructor.stack(async, 'collegue')(function (ready) {
-            destructor.addDestructor('collegue', colleague, 'destroy')
-            colleague.listen(program, async())
-            colleague.ready.wait(ready, 'unlatch')
-        })
+    var thereafter = new Thereafter
+    destructible.addDestructor('thereafter', thereafter, 'cancel')
 
-    })(abend)
+    thereafter.run(function (ready) {
+        destructible.addDestructor('collegue', colleague, 'destroy')
+        colleague.listen(program, destructible.monitor('colleague'))
+        colleague.ready.wait(ready, 'unlatch')
+    })
 
     var service = new Service(inquisitor)
     var destroyer = require('server-destroy')
@@ -85,11 +87,20 @@ require('arguable')(module, require('cadence')(function (async, program) {
     var server = http.createServer(service.reactor.middleware)
     destroyer(server)
 
-    destructor.addDestructor('http', server, 'destroy')
+    thereafter.run(function (ready) {
+        cadence(function (async) {
+            async(function () {
+                destructible.addDestructor('http', server, 'destroy')
+                server.listen(bind.port, bind.address, async())
+            }, function () {
+                ready.unlatch()
+                delta(async()).ee(server).on('close')
+            })
+        })(destructible.monitor('server'))
+    })
 
     async(function () {
-        destructor.ready.wait(async())
-        server.listen(bind.port, bind.address, async())
+        destructible.ready.wait(async())
     }, function () {
         logger.info('started', { params: program.ultimate, argv: program.argv })
     })
