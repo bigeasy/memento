@@ -28,7 +28,7 @@
                             "conference":                   "0.8.x",
                             "cubbyhole":                    "0.0.x",
                             "destructible":                 "0.9.x",
-                            "reactor":                      "4.6.x",
+                            "reactor":                      "5.0.x",
                             "prolific.logger":              "3.0.x",
                             "prolific.shuttle":             "11.0.x",
                             "server-destroy":               "1.0.1"
