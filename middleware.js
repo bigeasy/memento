@@ -24,15 +24,14 @@ Service.prototype.set = cadence(function (async, request, path) {
 Service.prototype.get = cadence(function (async, request, path) {
     var got = this._inquisitor.get(path)
     if (got == null) {
-        request.raise(404)
+        throw 404
     }
     return got
 })
 
 Service.prototype.remove = cadence(function (async, request, path) {
-    console.log(request.body)
-    var value = request.body.value
     this._inquisitor.remove({ path: path }, async())
+    return []
 })
 
 Service.prototype.health = cadence(function () {
