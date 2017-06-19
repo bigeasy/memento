@@ -30,7 +30,7 @@
                     "prolific.logger": "5.0.x",
                     "prolific.shuttle": "11.0.x",
                     "server-destroy": "1.0.1",
-                    "thereafter": "0.0.x"
+                    "thereafter": "0.1.x"
           },
           "devDependencies": {
                     "compassion.colleague": "0.9.x",
