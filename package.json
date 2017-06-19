@@ -1,48 +1,44 @@
 {
-    "name":                 "memento",
-    "version":              "0.0.8",
-    "description":
-
-      "A Paxos backed replicated state machine key-value store.",
-
-    "keywords":
-    [
-                            "paxos", "rsm", "replicated", "state", "machine",
-                            "etcd"
-    ],
-    "author":               "Alan Gutierrez",
-    "homepage":             "http://bigeasy.github.com/cadence",
-    "bugs":                 "http://bigeasy.github.com/cadence/issues",
-    "license":              "MIT",
-    "repository":
-    {
-                            "type": "git",
-                            "url": "http://github.com/bigeasy/memento.git"
-    },
-    "dependencies":
-    {
-                            "abend":                        "1.0.x",
-                            "arguable":                     "5.2.x",
-                            "cadence":                      "1.0.x",
-                            "colleague":                    "0.5.x",
-                            "conference":                   "0.8.x",
-                            "cubbyhole":                    "0.0.x",
-                            "destructible":                 "0.12.x",
-                            "reactor":                      "5.0.x",
-                            "prolific.logger":              "5.0.x",
-                            "prolific.shuttle":             "11.0.x",
-                            "server-destroy":               "1.0.1",
-                            "thereafter":                   "0.0.x"
-    },
-    "devDependencies":
-    {
-                            "compassion.colleague":         "0.8.x",
-                            "proof":                        "3.0.x",
-                            "vizsla":                       "3.6.x"
-    },
-    "main":                 "memento",
-    "scripts":
-    {
-                            "test": "proof platform win32 && proof test */*.t.js || t/test"
-    }
+          "name": "memento",
+          "version": "0.0.8",
+          "description": "A Paxos backed replicated state machine key-value store.",
+          "keywords": [
+                    "paxos",
+                    "rsm",
+                    "replicated",
+                    "state",
+                    "machine",
+                    "etcd"
+          ],
+          "author": "Alan Gutierrez",
+          "homepage": "http://bigeasy.github.com/cadence",
+          "bugs": "http://bigeasy.github.com/cadence/issues",
+          "license": "MIT",
+          "repository": {
+                    "type": "git",
+                    "url": "http://github.com/bigeasy/memento.git"
+          },
+          "dependencies": {
+                    "abend": "1.0.x",
+                    "arguable": "5.2.x",
+                    "cadence": "1.0.x",
+                    "colleague": "0.5.x",
+                    "conference": "0.8.x",
+                    "cubbyhole": "0.0.x",
+                    "destructible": "0.12.x",
+                    "reactor": "5.0.x",
+                    "prolific.logger": "5.0.x",
+                    "prolific.shuttle": "11.0.x",
+                    "server-destroy": "1.0.1",
+                    "thereafter": "0.0.x"
+          },
+          "devDependencies": {
+                    "compassion.colleague": "0.9.x",
+                    "proof": "3.0.x",
+                    "vizsla": "3.6.x"
+          },
+          "main": "memento",
+          "scripts": {
+                    "test": "proof platform win32 && proof test */*.t.js || t/test"
+          }
 }
