@@ -25,7 +25,7 @@
                     "colleague": "0.5.x",
                     "conference": "0.8.x",
                     "cubbyhole": "0.0.x",
-                    "destructible": "0.12.x",
+                    "destructible": "0.13.x",
                     "reactor": "5.0.x",
                     "prolific.logger": "5.0.x",
                     "prolific.shuttle": "11.0.x",
