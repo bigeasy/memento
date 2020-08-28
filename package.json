@@ -21,14 +21,14 @@
     },
     "dependencies":
     {
-                            "mvcc":                         "0.0.x"
+                            "rescue":                       "7.0.0-alpha.0"
     },
     "devDependencies":
     {
-                            "proof":                        "3.0.x"
+                            "proof":                        "^9.0.2"
     },
     "scripts":
     {
-                            "test": "proof platform win32 && proof test */*.t.js || t/test"
+                            "test": "proof test/*.t.js"
     }
 }
