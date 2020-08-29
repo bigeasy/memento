@@ -27,6 +27,7 @@
     {
                             "proof":                        "^9.0.2"
     },
+    "main":                 "memento",
     "scripts":
     {
                             "test": "proof test/*.t.js"

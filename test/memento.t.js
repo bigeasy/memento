@@ -2,7 +2,7 @@ require('proof')(1, async okay => {
     const fs = require('fs').promises
     const path = require('path')
 
-    const Memento = require('../_memento')
+    const Memento = require('..')
 
     okay(Memento, 'require')
 
