@@ -1,5 +1,10 @@
 async function main () {
-    const memento = new Memento(path.join(__dirname, 'test/tmp/sketch'))
+    const memento = new Memento({
+        directory: path.join(__dirname, 'test/tmp/sketch')
+        comparators: {
+            'custom': (left, right) => +left - +right
+        }
+    })
 
     const employees = memento.collection('employees')
 
@@ -14,19 +19,34 @@ async function main () {
 
     const mutator = collection.mutator()
 
-    await mutator.insert({ firstName: 'George', lastName: 'Washington', state: 'VA' })
-    await mutator.insert({ firstName: 'John', lastName: 'Adams', state: 'MA' })
-    await mutator.insert({ firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
+    mutator.set('employee', { firstName: 'George', lastName: 'Washington', state: 'WV' })
+    mutator.set('employee', { firstName: 'John', lastName: 'Adams', state: 'MA' })
+    mutator.set('employee', { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
 
     await mutator.commit()
 
     const snapshot = employees.snapshot()
 
-    for await (const employees of snapshot.index('name', Memento.MIN)) {
+    for await (const employees of snapshot.forward('state')) {
         for (const employee of employees) {
             console.log(employee)
+            if (employee.state != 'MA') {
+                break
+            }
         }
     }
 
-    snapshot.release()
+    const mutator = collection.mutator()
+
+    for await (const employees of mutator.forward('employee')) {
+        while (!employees.done()) {
+            if (employee.key.lastName == 'Washington') {
+                const { firstName, lastName } = employee.key.value
+                employee.set({ firstName, lastName, state: 'VA' })
+                await mutator.flush()
+            }
+        }
+    }
+
+    await mutator.commit()
 }
