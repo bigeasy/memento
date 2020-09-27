@@ -62,7 +62,7 @@ require('proof')(3, async okay => {
     await fs.rmdir(directory, { recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
-    const destructible = new Destructible('memento.t')
+    const destructible = new Destructible(5000, 'memento.t')
     const memento = new Memento(destructible.durable('memento'), directory)
     await memento.open(async (version) => {
         switch (version) {
@@ -72,7 +72,7 @@ require('proof')(3, async okay => {
         }
     }, 1)
 
-    await Destructible.rescue(async function () {
+    destructible.durable('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
 
         {
@@ -106,7 +106,7 @@ require('proof')(3, async okay => {
             mutator.rollback()
             okay(gathered, presidents.slice(0, 1), 'staged')
         }
-    })
+    }))
 
-    await memento.destructible.destroy().rejected
+    await memento.destructible.rejected
 })

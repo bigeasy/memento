@@ -1,11 +1,14 @@
 const path = require('path')
 const fs = require('fs').promises
 
+const Interrupt = require('interrupt')
+
 const assert = require('assert')
 
 const Strata = require('b-tree')
 const Cache = require('b-tree/cache')
 
+const Locker = require('amalgamate/locker')
 const Amalgamator = require('amalgamate')
 
 const rescue = require('rescue')
@@ -159,26 +162,22 @@ class OuterIterator {
 }
 
 class Snapshot {
-    constructor (memento, snapshot) {
+    constructor (memento, transaction) {
         this._memento = memento
-        this._snapshot = snapshot
+        this._transaction = transaction
     }
 }
 
 class Mutator extends Snapshot {
     static instance = 0
 
-    constructor (memento, snapshot, version) {
-        super(memento, snapshot)
+    constructor (memento, version) {
+        super(memento, memento._locker.mutator())
         this._destructible = memento._destructible.opened.ephemeral([ 'mutation', Mutator.instance++ ])
-        this._snapshot[version] = true
         this._mutations = {}
         this._version = version
         this._index = 0
         this._references = []
-        //for (const name in this._memento._stores[name]) {
-        //    this._references.push(this._stores[name].amalgamator.reference(this._snapshot))
-        //}
     }
 
     _mutation (name) {
@@ -187,7 +186,6 @@ class Mutator extends Snapshot {
             return this._mutations[name] = {
                 series: 0,
                 amalgamator: this._memento._stores[name].amalgamator,
-                mutator: this._memento._stores[name].amalgamator.mutator(this._snapshot, this._version),
                 appends: [[]]
             }
         }
@@ -197,7 +195,7 @@ class Mutator extends Snapshot {
     // TODO Okay, so how do we say that any iterators should recalculate with a
     // new `Amalgamate.iterator()`? Use a count.
     async _merge (mutation) {
-        await mutation.mutator.merge(mutation.appends[1], null)
+        await mutation.amalgamator.merge(this._transaction, mutation.appends[1])
         mutation.appends.pop()
     }
 
@@ -205,6 +203,7 @@ class Mutator extends Snapshot {
         if (mutation.appends[0].length >= max && mutation.appends.length == 1) {
             mutation.merge++
             mutation.appends.unshift([])
+            // TODO Really seems like a queue is appropriate.
             return this._destructible.ephemeral([ 'merge', mutation.name ], this._merge(mutation))
         }
         return null
@@ -242,11 +241,10 @@ class Mutator extends Snapshot {
     }
 
     forward (name) {
-        return new OuterIterator(this._snapshot, this._mutation(name), 'forward', null)
+        return new OuterIterator(this._transaction, this._mutation(name), 'forward', null)
     }
 
     async commit () {
-        //this._references.forEach(reference => reference.release())
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         do {
             await this._destructible.drain()
@@ -260,15 +258,12 @@ class Mutator extends Snapshot {
             }
             return false
         }
-        for (const mutation of mutations) {
-            mutation.mutator.commit()
-        }
-        this._memento._versions[this._version] = true
+        // TODO Here goes your commit write *before* you call in-memory commit.
+        this._memento._locker.commit(this._transaction)
         return true
     }
 
     async rollback () {
-        //this._references.forEach(reference => reference.release())
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         do {
             await this._destructible.drain()
@@ -276,9 +271,7 @@ class Mutator extends Snapshot {
                 this._maybeMerge(mutation, 1)
             }
         } while (this._destructible.ephemerals != 0)
-        for (const mutation of mutations) {
-            mutation.mutator.rollback()
-        }
+        this._memento._locker.rollback(this._transaction)
     }
 }
 
@@ -287,15 +280,27 @@ const ASCENSION_TYPE = [ String, Number, BigInt ]
 class Memento {
     static ASC = Symbol('ascending')
     static DSC = Symbol('decending')
+    static Error = Interrupt.create('Memento.Error')
 
     constructor (destructible, directory, options = {}) {
         this.destructible = destructible
+        this.destructible.operative++
+        this.destructible.destruct(() => {
+            this.destructible.ephemeral('shutdown', async () => {
+                await this._locker.drain()
+                console.log('drained')
+                await this._locker.rotate()
+                console.log('rotated')
+                this.destructible.operative--
+            })
+        })
         this._destructible = { opened: null }
         this._stores = {}
         this._cache = new Cache
         this._version = 1
         this._versions = { '0': true }
         this.directory = directory
+        this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
         const primary = coalesce(options.primary, {})
         const stage = coalesce(options.stage, {})
         const leaf = { stage: coalesce(stage.leaf, {}), primary: coalesce(primary.leaf, {}) }
@@ -383,6 +388,7 @@ class Memento {
         const destructible = this._destructible.opened.durable([ 'store', name ])
 
         const amalgamator = new Amalgamator(destructible, {
+            locker: this._locker,
             directory: path.join(directory, 'store'),
             cache: this._cache,
             key: {
@@ -406,14 +412,14 @@ class Memento {
             transformer: function (operation) {
                 if (operation.parts[0].method == 'insert') {
                     return {
-                        index: operation.key.index,
+                        order: operation.key.order,
                         method: 'insert',
                         key: operation.key.value,
                         parts: [ operation.parts[1] ]
                     }
                 }
                 return {
-                    index: operation.key.index,
+                    order: operation.key.order,
                     method: 'remove',
                     key: operation.key.value
                 }
@@ -459,12 +465,9 @@ class Memento {
         await this._store(name, true)
     }
 
-    _snapshot () {
-        return JSON.parse(JSON.stringify(this._versions))
-    }
-
     mutator () {
-        return new Mutator(this, this._snapshot(), this._version++)
+        Memento.Error.assert(!this.destructible.destroyed, 'destroyed')
+        return new Mutator(this, this._version++)
     }
 }
 
