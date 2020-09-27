@@ -67,6 +67,8 @@ class InnerIterator {
 
     //
     next () {
+        // TODO Here is the inner series check, so all we need is one for the
+        // outer iterator and we're good.
         if (this._outer._mutation.series != this._series) {
             this._series = this._outer._mutation.series
             return { done: true, value: null }
@@ -134,6 +136,7 @@ class OuterIterator {
             additional.push(advance.forward([ appends[1] ]))
         }
         const iterator = amalgamator.iterator(versions, direction, key, inclusive, additional)
+        // TODO LOL. Overwriting this very function.
         this._iterator = iterator[Symbol.asyncIterator]()
     }
 
@@ -163,51 +166,55 @@ class Snapshot {
 }
 
 class Mutator extends Snapshot {
+    static instance = 0
+
     constructor (memento, snapshot, version) {
         super(memento, snapshot)
+        this._destructible = memento._destructible.opened.ephemeral([ 'mutation', Mutator.instance++ ])
         this._snapshot[version] = true
+        this._mutations = {}
         this._version = version
         this._index = 0
-        this._cursors = []
-        this._notebooks = []
-    }
-
-    async _assimilate () {
-        do {
-            if (this._queues.size == 0) {
-                await this._latch.promise
-            }
-            for (const [ name, value ] of this._queues.entries()) {
-                const stage = this._stage(name)
-            }
-        } while (!this.destroyed)
-    }
-
-    _notebook (name) {
-        const notebook = this._notebooks[name]
-        if (notebook == null) {
-            return this._notebooks[name] = new Notebook
-        }
-        return notebook
+        this._references = []
+        //for (const name in this._memento._stores[name]) {
+        //    this._references.push(this._stores[name].amalgamator.reference(this._snapshot))
+        //}
     }
 
     _mutation (name) {
-        const mutation = this._mutation[name]
+        const mutation = this._mutations[name]
         if (mutation == null) {
-            return this._mutation[name] = {
+            return this._mutations[name] = {
                 series: 0,
                 amalgamator: this._memento._stores[name].amalgamator,
-                mutator: this._memento._stores[name].amalgamator.mutator(this._version),
+                mutator: this._memento._stores[name].amalgamator.mutator(this._snapshot, this._version),
                 appends: [[]]
             }
         }
         return mutation
     }
 
+    // TODO Okay, so how do we say that any iterators should recalculate with a
+    // new `Amalgamate.iterator()`? Use a count.
+    async _merge (mutation) {
+        await mutation.mutator.merge(mutation.appends[1], null)
+        mutation.appends.pop()
+    }
+
+    _maybeMerge (mutation, max) {
+        if (mutation.appends[0].length >= max && mutation.appends.length == 1) {
+            mutation.merge++
+            mutation.appends.unshift([])
+            return this._destructible.ephemeral([ 'merge', mutation.name ], this._merge(mutation))
+        }
+        return null
+    }
+
     _append (mutation, key, parts) {
         const array = mutation.appends[0]
         const { index, found } = find(this._comparator, array, key, 0, array.length - 1)
         array.splice(index, 0, { key: key, parts: parts })
+        this._maybeMerge(mutation, 1024)
     }
 
     set (name, record) {
@@ -239,9 +246,39 @@ class Mutator extends Snapshot {
     }
 
     async commit () {
+        //this._references.forEach(reference => reference.release())
+        const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
+        do {
+            await this._destructible.drain()
+            for (const mutation of mutations) {
+                this._maybeMerge(mutation, 1)
+            }
+        } while (this._destructible.ephemerals != 0)
+        if (mutations.some(mutation => mutation.conflicted)) {
+            for (const mutation of mutations) {
+                mutation.mutator.rollback()
+            }
+            return false
+        }
+        for (const mutation of mutations) {
+            mutation.mutator.commit()
+        }
+        this._memento._versions[this._version] = true
+        return true
     }
 
     async rollback () {
+        //this._references.forEach(reference => reference.release())
+        const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
+        do {
+            await this._destructible.drain()
+            for (const mutation of mutations) {
+                this._maybeMerge(mutation, 1)
+            }
+        } while (this._destructible.ephemerals != 0)
+        for (const mutation of mutations) {
+            mutation.mutator.rollback()
+        }
     }
 }
 
@@ -252,10 +289,12 @@ class Memento {
     static DSC = Symbol('decending')
 
     constructor (destructible, directory, options = {}) {
-        this._destructible = { root: destructible, opened: null }
+        this.destructible = destructible
+        this._destructible = { opened: null }
         this._stores = {}
         this._cache = new Cache
-        this._version = 1n
+        this._version = 1
+        this._versions = { '0': true }
         this.directory = directory
         const primary = coalesce(options.primary, {})
         const stage = coalesce(options.stage, {})
@@ -286,7 +325,7 @@ class Memento {
     }
 
     async open (upgrade = null, version = 1) {
-        this._destructible.opened = this._destructible.root.ephemeral('opened')
+        this._destructible.opened = this.destructible.ephemeral('opened')
         const list = async () => {
             try {
                 return await fs.readdir(this.directory)
@@ -346,11 +385,11 @@ class Memento {
         const amalgamator = new Amalgamator(destructible, {
             directory: path.join(directory, 'store'),
             cache: this._cache,
-            extractor: extractor,
             key: {
+                extract: extractor,
                 compare: comparator,
                 serialize: function (key) {
-                    return [ Buffer.from(JSON.serialize(key)) ]
+                    return [ Buffer.from(JSON.stringify(key)) ]
                 },
                 deserialize: function (parts) {
                     return JSON.parse(parts[0].toString())
@@ -358,36 +397,25 @@ class Memento {
             },
             parts: {
                 serialize: function (parts) {
-                    return [ Buffer.from(JSON.serialize(parts)) ]
+                    return [ Buffer.from(JSON.stringify(parts)) ]
                 },
                 deserialize: function (parts) {
                     return JSON.parse(parts[0].toString())
                 }
             },
-            header: {
-                compose: function (version, method, index) {
-                    return { header: { method, index }, version }
-                },
-                serialize: function (header) {
-                    return Buffer.from(JSON.stringify({
-                        header: {
-                            method: header.header.method,
-                            index: header.header.index
-                        },
-                        version: header.version.toString()
-                    }))
-                },
-                deserialize: function (buffer) {
-                    const header = JSON.parse(buffer.toString())
-                    header.version = BigInt(header.version)
-                    return header
-                },
-            },
             transformer: function (operation) {
+                if (operation.parts[0].method == 'insert') {
+                    return {
+                        index: operation.key.index,
+                        method: 'insert',
+                        key: operation.key.value,
+                        parts: [ operation.parts[1] ]
+                    }
+                }
                 return {
-                    method: operation.method,
-                    key: key,
-                    value: ('value' in operation) ? operation.value : null
+                    index: operation.key.index,
+                    method: 'remove',
+                    key: operation.key.value
                 }
             },
             createIfMissing: create,
@@ -432,14 +460,11 @@ class Memento {
     }
 
     _snapshot () {
-        return { '0': true }
+        return JSON.parse(JSON.stringify(this._versions))
     }
 
     mutator () {
         return new Mutator(this, this._snapshot(), this._version++)
-    }
-
-    async close () {
     }
 }
 
