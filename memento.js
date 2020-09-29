@@ -87,9 +87,9 @@ class InnerIterator {
             }
         }
         const array = this._outer._mutation.appends[0]
-        let { index, found } = this._previous == null
+        let { index, found } = this._outer._previous.key == null
             ? { index: 0, found: false }
-            : this._outer._find(this._previous, false)
+            : this._outer._find(this._outer._previous, false)
         if (found) {
             index++
         }
@@ -104,8 +104,8 @@ class InnerIterator {
         }
         candidates.sort((left, right) => this._compare(left, right))
         const candidate = candidates.pop()
-        this._previous = candidate.array[candidate.index++]
-        return { done: false, value: this._previous.parts[1] }
+        this._outer._previous = candidate.array[candidate.index++]
+        return { done: false, value: this._outer._previous.parts[1] }
     }
 }
 
@@ -113,7 +113,7 @@ class OuterIterator {
     constructor (versions, mutation, direction, key, inclusive = true) {
         this._versions = versions
         this._direction = direction
-        this._previous = key
+        this._previous = { key }
         this._mutation = mutation
         this._series = 0
         this._inclusive = inclusive
@@ -131,7 +131,7 @@ class OuterIterator {
             _mutation: { appends },
             _versions: versions,
             _direction: direction,
-            _previous: key,
+            _previous: { key },
             _inclusive: inclusive
         } = this
         const additional = []
@@ -149,7 +149,7 @@ class OuterIterator {
         }
         const comparator = this._mutation.amalgamator._comparator.stage
         const array = this._mutation.appends[0]
-        return find(comparator, array, value.key, 0, array.length)
+        return find(comparator, array, value.key, 0, array.length - 1)
     }
 
     async next () {
@@ -225,10 +225,10 @@ class Mutator extends Snapshot {
         this._append(mutation, {
             value: mutation.amalgamator.strata.extract([ record ]),
             version: this._version,
-            index: this._index++
+            order: this._index++
         }, [{
             method: 'insert',
-            index: this._index,
+            order: this._index,
             version: this._version
         }, record ])
     }
@@ -237,9 +237,9 @@ class Mutator extends Snapshot {
         this._append({
             value: store.strata.extract(record),
             version: this._version,
-            index: this._index++
+            order: this._index++
         }, [{
-            header: { method: 'remove', index: this._index },
+            header: { method: 'remove', order: this._index },
             version: this._version
         }, key ])
     }
@@ -292,9 +292,7 @@ class Memento {
         this.destructible.destruct(() => {
             this.destructible.ephemeral('shutdown', async () => {
                 await this._locker.drain()
-                console.log('drained')
                 await this._locker.rotate()
-                console.log('rotated')
                 this.destructible.operative--
             })
         })
