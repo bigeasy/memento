@@ -115,17 +115,17 @@ class OuterIterator {
         this._direction = direction
         this._previous = key
         this._mutation = mutation
-        this._series = mutation.series
+        this._series = 0
         this._inclusive = inclusive
         this._done = false
-        this._iterator()
+        this._search()
     }
 
     [Symbol.asyncIterator] () {
         return this
     }
 
-    _iterator () {
+    _search () {
         const {
             _mutation: { amalgamator },
             _mutation: { appends },
@@ -156,6 +156,10 @@ class OuterIterator {
         if (this._done) {
             return { done: true, value: null }
         }
+        if (this._series != this._mutation.series) {
+            this._series = this._mutation.series
+            this._search()
+        }
         const next = await this._iterator.next()
         return { done: false, value: new InnerIterator(this, next) }
     }
@@ -184,7 +188,7 @@ class Mutator extends Snapshot {
         const mutation = this._mutations[name]
         if (mutation == null) {
             return this._mutations[name] = {
-                series: 0,
+                series: 1,
                 amalgamator: this._memento._stores[name].amalgamator,
                 appends: [[]]
             }
