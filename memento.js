@@ -296,12 +296,16 @@ class Schema {
                 : [ extraction[path] ]
             let type = ASCENSION_TYPE.indexOf(String), direction = 1
             for (const property of properties) {
-                if (property === Memento.ASC) {
-                    direction = 1
-                } else if (property === Memento.DSC) {
-                    direction = -1
-                } else {
+                switch (typeof property) {
+                case 'number':
+                    direction = part < 0 ? -1 : 1
+                    break
+                case 'string':
                     type = property
+                    break
+                case 'function':
+                    type = ASCENSION_TYPE.indexOf(property)
+                    break
                 }
             }
             comparisons.push({
@@ -324,7 +328,7 @@ class Memento {
     static DSC = Symbol('decending')
     static Error = Interrupt.create('Memento.Error')
 
-    constructor (destructible, directory, options = {}) {
+    constructor (destructible, options = {}) {
         this.destructible = destructible
         this.destructible.operative++
         this.destructible.destruct(() => {
@@ -339,12 +343,13 @@ class Memento {
         this._cache = new Cache
         this._version = 1
         this._versions = { '0': true }
-        this.directory = directory
+        this.directory = options.directory
         this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
         const primary = coalesce(options.primary, {})
         const stage = coalesce(options.stage, {})
         const leaf = { stage: coalesce(stage.leaf, {}), primary: coalesce(primary.leaf, {}) }
         const branch = { stage: coalesce(stage.branch, {}), primary: coalesce(primary.branch, {}) }
+        this._comparators = coalesce(options.comparators, {})
         this._strata = {
             stage: {
                 leaf: {
@@ -420,7 +425,12 @@ class Memento {
         }
 
         const comparator = ascension(key.map(part => {
-            return [ ASCENSION_TYPE[part.type], part.direction ]
+            return [
+                typeof part.type == 'string'
+                    ? this._comparators[part.type]
+                    : ASCENSION_TYPE[part.type],
+                part.direction
+            ]
         }), function (object) {
             return object
         })
