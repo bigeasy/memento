@@ -281,6 +281,44 @@ class Mutator extends Snapshot {
 
 const ASCENSION_TYPE = [ String, Number, BigInt ]
 
+class Schema {
+    constructor (memento) {
+        this._memento = memento
+    }
+
+    async store (name, extraction) {
+        const comparisons = []
+
+        for (const path in extraction) {
+            const parts = path.split('.')
+            const properties = Array.isArray(extraction[path])
+                ? extraction[path]
+                : [ extraction[path] ]
+            let type = ASCENSION_TYPE.indexOf(String), direction = 1
+            for (const property of properties) {
+                if (property === Memento.ASC) {
+                    direction = 1
+                } else if (property === Memento.DSC) {
+                    direction = -1
+                } else {
+                    type = property
+                }
+            }
+            comparisons.push({
+                type: type,
+                direction: direction,
+                parts: path.split('.')
+            })
+        }
+
+        const directory = path.join(this._memento.directory, 'stores', name)
+        await fs.mkdir(directory, { recursive: true })
+        await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
+
+        await this._memento._store(name, true)
+    }
+}
+
 class Memento {
     static ASC = Symbol('ascending')
     static DSC = Symbol('decending')
@@ -358,7 +396,7 @@ class Memento {
         if (latest < version) {
         }
         if (latest < version && upgrade != null) {
-            await upgrade(version)
+            await upgrade(new Schema(this), version)
         }
     }
 
@@ -433,38 +471,6 @@ class Memento {
         await amalgamator.ready
 
         const store = this._stores[name] = { destructible, amalgamator }
-    }
-
-    async store (name, extraction) {
-        const comparisons = []
-
-        for (const path in extraction) {
-            const parts = path.split('.')
-            const properties = Array.isArray(extraction[path])
-                ? extraction[path]
-                : [ extraction[path] ]
-            let type = ASCENSION_TYPE.indexOf(String), direction = 1
-            for (const property of properties) {
-                if (property === Memento.ASC) {
-                    direction = 1
-                } else if (property === Memento.DSC) {
-                    direction = -1
-                } else {
-                    type = property
-                }
-            }
-            comparisons.push({
-                type: type,
-                direction: direction,
-                parts: path.split('.')
-            })
-        }
-
-        const directory = path.join(this.directory, 'stores', name)
-        await fs.mkdir(directory, { recursive: true })
-        await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
-
-        await this._store(name, true)
     }
 
     mutator () {

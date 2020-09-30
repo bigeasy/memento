@@ -64,10 +64,10 @@ require('proof')(3, async okay => {
 
     const destructible = new Destructible(5000, 'memento.t')
     const memento = new Memento(destructible.durable('memento'), directory)
-    await memento.open(async (version) => {
+    await memento.open(async (schema, version) => {
         switch (version) {
         case 1:
-            await memento.store('employee', { lastName: Memento.ASC, firstName: Memento.ASC })
+            await schema.store('employee', { lastName: Memento.ASC, firstName: Memento.ASC })
             break
         }
     }, 1)
