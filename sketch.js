@@ -6,47 +6,43 @@ async function main () {
         }
     })
 
-    const employees = memento.collection('employees')
+    const presidents = memento.open('presidents', async schema => {
+        switch (schema.version) {
+        case 1:
+            await schema.store('presidents', { firstTerm: Number })
+            await schema.index('presidents', 'name', { lastName: 1, firstName 1 })
+            schema.set('presidents', {
+                firstName: 'George', lastName: 'Washington', firstTerm: 1, state: 'VA'
+            })
+            break
+        }
+    }, 1)
 
-    await employees.store('name', { lastName: Memento.ASC, firstName: Memento.ASC })
-    await employees.store('name', { lastName: [ String, Memento.ASC ], firstName: [ String, Memento.ASC ] })
-    await employees.store('name', [
-        [ 'person/lastName', String ],
-        [ 'person/firstName', String ]
-    ])
+    presidents.mutate(async mutator => {
+        mutator.set('employee', { firstName: 'John', lastName: 'Adams', state: 'MA' })
+        mutator.set('employee', { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
+        mutator.rollback()
+    })
 
-    await employees.index('state', { state: Memento.ASC }, { unique: false })
-
-    const mutator = collection.mutator()
-
-    mutator.set('employee', { firstName: 'George', lastName: 'Washington', state: 'WV' })
-    mutator.set('employee', { firstName: 'John', lastName: 'Adams', state: 'MA' })
-    mutator.set('employee', { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
-
-    await mutator.commit()
-
-    const snapshot = employees.snapshot()
-
-    for await (const employees of snapshot.forward('state')) {
-        for (const employee of employees) {
-            console.log(employee)
-            if (employee.state != 'MA') {
-                break
+    presidents.mutate(async mutator => {
+        mutator.set('employee', { firstName: 'John', lastName: 'Adams', state: 'MA' })
+        mutator.set('employee', { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
+        for await (const presidents of mutator.forward([ 'presidents', 'name' ])) {
+            for (const president of presidents) {
+                if (employee.state != 'MA') {
+                    break
+                }
             }
         }
-    }
+    })
 
-    const mutator = collection.mutator()
-
-    for await (const employees of mutator.forward('employee')) {
-        while (!employees.done()) {
-            if (employee.key.lastName == 'Washington') {
-                const { firstName, lastName } = employee.key.value
-                employee.set({ firstName, lastName, state: 'VA' })
-                await mutator.flush()
+    presidents.snapshot(async snapshot => {
+        for await (const presidents of snapshot.forward([ 'presidents', 'name' ])) {
+            for (const president of presidents) {
+                if (employee.state != 'MA') {
+                    break
+                }
             }
         }
-    }
-
-    await mutator.commit()
+    })
 }
