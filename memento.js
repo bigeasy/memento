@@ -3,6 +3,8 @@ const fs = require('fs').promises
 
 const Interrupt = require('interrupt')
 
+const Keyify = require('keyify')
+
 const assert = require('assert')
 
 const Strata = require('b-tree')
@@ -184,12 +186,16 @@ class Mutator extends Snapshot {
         this._references = []
     }
 
-    _mutation (name) {
-        const mutation = this._mutations[name]
+    _mutation (key) {
+        const keyified = Keyify.stringify(key)
+        const mutation = this._mutations[keyified]
         if (mutation == null) {
-            return this._mutations[name] = {
+            const amalgamator = Array.isArray(key)
+                ? this._memento._stores[key[0]].indices[key[1]].amalgamator
+                : this._memento._stores[key].amalgamator
+            return this._mutations[keyified] = {
                 series: 1,
-                amalgamator: this._memento._stores[name].amalgamator,
+                amalgamator: amalgamator,
                 appends: [[]]
             }
         }
@@ -245,6 +251,9 @@ class Mutator extends Snapshot {
     }
 
     forward (name) {
+        if (Array.isArray(name)) {
+            const mutation = this._mutation(name)
+        }
         return new OuterIterator(this._transaction, this._mutation(name), 'forward', null)
     }
 
@@ -286,7 +295,7 @@ class Schema {
         this._memento = memento
     }
 
-    async store (name, extraction) {
+    _comparisons (extraction) {
         const comparisons = []
 
         for (const path in extraction) {
@@ -315,11 +324,32 @@ class Schema {
             })
         }
 
+        return comparisons
+    }
+
+    // TODO Need a rollback interface.
+    async store (name, extraction) {
+        const comparisons = this._comparisons(extraction)
         const directory = path.join(this._memento.directory, 'stores', name)
         await fs.mkdir(directory, { recursive: true })
         await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
-
         await this._memento._store(name, true)
+    }
+
+    async index ([ storeName, name ], extraction, options = {}) {
+        const comparisons = this._comparisons(extraction)
+        const store = this._memento._stores[storeName]
+        const directory = path.join(this._memento.directory, 'indices', storeName, name)
+        await fs.mkdir(directory, { recursive: true })
+        await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify({ comparisons, options }))
+        await this._memento._index([ storeName, name ], true)
+    }
+
+    async remove (name) {
+    }
+
+    // TODO Would need to close completely, then rename and reopen.
+    async rename (from, to) {
     }
 }
 
@@ -407,10 +437,10 @@ class Memento {
 
     async _store (name, create = false) {
         const directory = path.join(this.directory, 'stores', name)
-        const key = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
+        const comparisons = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
         await fs.mkdir(path.join(directory, 'store'))
 
-        const extractors = key.map(part => {
+        const extractors = comparisons.map(part => {
             return function (object) {
                 const parts = part.parts.slice()
                 while (object != null && parts.length != 0) {
@@ -424,7 +454,7 @@ class Memento {
             return extractors.map(extractor => extractor(parts[0]))
         }
 
-        const comparator = ascension(key.map(part => {
+        const comparator = ascension(comparisons.map(part => {
             return [
                 typeof part.type == 'string'
                     ? this._comparators[part.type]
@@ -435,6 +465,7 @@ class Memento {
             return object
         })
 
+        // Needs to be ephemeral in order to support `rename`.
         const destructible = this._destructible.opened.durable([ 'store', name ])
 
         const amalgamator = new Amalgamator(destructible, {
@@ -480,7 +511,91 @@ class Memento {
 
         await amalgamator.ready
 
-        const store = this._stores[name] = { destructible, amalgamator }
+        this._stores[name] = { destructible, amalgamator, indices: {}, comparisons }
+    }
+
+    async _index ([ storeName, name ], create = false) {
+        const directory = path.join(this.directory, 'indices', storeName, name)
+        const key = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
+        await fs.mkdir(path.join(directory, 'store'))
+
+        const store = this._stores[storeName]
+
+        const comparisons = key.comparisons.concat(store.comparisons)
+
+        console.log(comparisons)
+
+        const extractors = comparisons.map(part => {
+            return function (object) {
+                const parts = part.parts.slice()
+                while (object != null && parts.length != 0) {
+                    object = object[parts.shift()]
+                }
+                return object
+            }
+        })
+
+        const extractor = function (parts) {
+            return extractors.map(extractor => extractor(parts[0]))
+        }
+
+        const comparator = ascension(comparisons.map(part => {
+            return [
+                typeof part.type == 'string'
+                    ? this._comparators[part.type]
+                    : ASCENSION_TYPE[part.type],
+                part.direction
+            ]
+        }), function (object) {
+            return object
+        })
+
+        // Needs to be ephemeral in order to support `rename`.
+        const destructible = this._destructible.opened.durable([ 'store', name ])
+
+        const amalgamator = new Amalgamator(destructible, {
+            locker: this._locker,
+            directory: path.join(directory, 'store'),
+            cache: this._cache,
+            key: {
+                compare: comparator,
+                serialize: function (key) {
+                    return [ Buffer.from(JSON.stringify(key)) ]
+                },
+                deserialize: function (parts) {
+                    return JSON.parse(parts[0].toString())
+                }
+            },
+            parts: {
+                serialize: function (parts) {
+                    return [ Buffer.from(JSON.stringify(parts)) ]
+                },
+                deserialize: function (parts) {
+                    return JSON.parse(parts[0].toString())
+                }
+            },
+            transformer: function (operation) {
+                if (operation.parts[0].method == 'insert') {
+                    return {
+                        order: operation.key.order,
+                        method: 'insert',
+                        key: operation.key.value,
+                        parts: [ operation.parts[1] ]
+                    }
+                }
+                return {
+                    order: operation.key.order,
+                    method: 'remove',
+                    key: operation.key.value
+                }
+            },
+            createIfMissing: create,
+            errorIfExists: create
+        })
+
+        await amalgamator.ready
+
+        store.indices[name] = { destructible, amalgamator, extractor }
     }
 
     mutator () {
