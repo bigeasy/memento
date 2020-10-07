@@ -35,10 +35,10 @@ function find (comparator, array, key, low, high) {
 }
 
 class InnerIterator {
-    constructor (outer, next) {
+    constructor (outer, items) {
         this._outer = outer
         this._series = outer._mutation.series
-        this._items = next.done ? null : { array: next.value, index: 0 }
+        this._items = items == null ? null : { array: items, index: 0 }
     }
 
     [Symbol.iterator] () {
@@ -120,7 +120,6 @@ class OuterIterator {
         this._series = 0
         this._inclusive = inclusive
         this._done = false
-        this._search()
     }
 
     [Symbol.asyncIterator] () {
@@ -140,9 +139,7 @@ class OuterIterator {
         if (appends.length == 2) {
             additional.push(advance.forward([ appends[1] ]))
         }
-        const iterator = amalgamator.iterator(versions, direction, key, inclusive, additional)
-        // TODO LOL. Overwriting this very function.
-        this._iterator = iterator[Symbol.asyncIterator]()
+        this._iterator = amalgamator.iterator(versions, direction, key, inclusive, additional)
     }
 
     _find (value) {
@@ -162,8 +159,12 @@ class OuterIterator {
             this._series = this._mutation.series
             this._search()
         }
-        const next = await this._iterator.next()
-        return { done: false, value: new InnerIterator(this, next) }
+        const promises = [], scope = { items: null }
+        this._iterator.next(promises, items => scope.items = items)
+        while (promises != 0) {
+            await promises.shift()
+        }
+        return { done: false, value: new InnerIterator(this, scope.items) }
     }
 }
 
@@ -219,29 +220,29 @@ class Mutator extends Snapshot {
         return null
     }
 
-    _append (mutation, key, parts) {
+    _append (mutation, method, key, part) {
+        const compound = [ key, Number.MAX_SAFE_INTEGER, this._index++ ]
         const array = mutation.appends[0]
-        const { index, found } = find(this._comparator, array, key, 0, array.length - 1)
-        array.splice(index, 0, { key: key, parts: parts })
+        const parts = [{
+            method: method,
+            version: compound[1],
+            order: compound[2]
+        }, part ]
+        const comparator = mutation.amalgamator._comparator.stage
+        const { index, found } = find(comparator, array, compound, 0, array.length - 1)
+        array.splice(index, 0, { key: compound, parts: parts })
         this._maybeMerge(mutation, 1024)
     }
 
     set (name, record) {
         const mutation = this._mutation(name)
-        this._append(mutation, {
-            value: mutation.amalgamator.strata.extract([ record ]),
-            version: this._version,
-            order: this._index++
-        }, [{
-            method: 'insert',
-            order: this._index,
-            version: this._version
-        }, record ])
+        const key = mutation.amalgamator.strata.extract([ record ])
+        this._append(mutation, 'insert', key, record)
     }
 
     unset (name, key) {
         this._append({
-            value: store.strata.extract(record),
+            value: store.strata.extract([ record ]),
             version: this._version,
             order: this._index++
         }, [{
@@ -493,14 +494,12 @@ class Memento {
             transformer: function (operation) {
                 if (operation.parts[0].method == 'insert') {
                     return {
-                        order: operation.key.order,
                         method: 'insert',
                         key: operation.key.value,
                         parts: [ operation.parts[1] ]
                     }
                 }
                 return {
-                    order: operation.key.order,
                     method: 'remove',
                     key: operation.key.value
                 }

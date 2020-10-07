@@ -80,7 +80,7 @@ require('proof')(3, async okay => {
     await fs.rmdir(directory, { recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
-    const destructible = new Destructible(5000, 'memento.t')
+    const destructible = new Destructible(1000, 'memento.t')
     const memento = new Memento(destructible.durable('memento'), {
         directory: directory,
         comparators: {
