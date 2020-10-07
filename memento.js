@@ -258,6 +258,32 @@ class Mutator extends Snapshot {
         return new OuterIterator(this._transaction, this._mutation(name), 'forward', null)
     }
 
+    _get (name, promises, key, consume) {
+        const mutation = this._mutation(name)
+        // TODO Expose comparators in Amalgamate.
+        const comparators = mutation.amalgamator._comparator
+        for (const array of mutation.appends) {
+            const { index, found } = find(comparators.stage, array, [ key ], 0, array.length - 1)
+            if (index < array.length) {
+                const item = array[index]
+                if (comparators.primary(item.key[0], key) == 0) {
+                    consume(item.parts[0].method == 'remove' ? null : item)
+                    return
+                }
+            }
+        }
+        mutation.amalgamator.get(this._transaction, promises, key, consume)
+    }
+
+    async get (name, key) {
+        const promises = [], scope = { item: null }
+        this._get(name, promises, key, item => scope.item = item)
+        while (promises.length != 0) {
+            await promises.shift()
+        }
+        return scope.item == null ? null : scope.item.parts[1]
+    }
+
     async commit () {
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         do {
@@ -495,13 +521,13 @@ class Memento {
                 if (operation.parts[0].method == 'insert') {
                     return {
                         method: 'insert',
-                        key: operation.key.value,
+                        key: operation.key[0],
                         parts: [ operation.parts[1] ]
                     }
                 }
                 return {
                     method: 'remove',
-                    key: operation.key.value
+                    key: operation.key[0]
                 }
             },
             createIfMissing: create,

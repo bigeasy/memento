@@ -109,6 +109,8 @@ require('proof')(3, async okay => {
 
                 mutator.set('employee', insert.shift())
 
+                okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
+
                 for await (const employees of mutator.forward('employee')) {
                     for (const employee of employees) {
                         gathered.push(employee)
@@ -122,6 +124,8 @@ require('proof')(3, async okay => {
         {
             const mutator = memento.mutator()
             const gathered = []
+
+            okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
             for await (const employees of mutator.forward('employee')) {
                 for (const employee of employees) {
                     gathered.push(employee)
