@@ -94,7 +94,7 @@ class InnerIterator {
         const array = this._outer._mutation.appends[0]
         let { index, found } = this._outer._previous.key == null
             ? { index: 0, found: false }
-            : this._outer._find(this._outer._previous, false)
+            : this._outer._find(this._outer._previous)
         if (found) {
             index++
         }
@@ -110,16 +110,25 @@ class InnerIterator {
         candidates.sort((left, right) => this._compare(left, right))
         const candidate = candidates.pop()
         this._outer._previous = candidate.array[candidate.index++]
-        return { done: false, value: this._outer._previous.parts[1] }
+        return { done: false, value: this._outer._previous.value }
     }
 }
 
 class OuterIterator {
-    constructor (versions, mutation, direction, key, inclusive = true) {
-        this._versions = versions
+    constructor ({
+        transaction, mutation, direction,
+        key = null, inclusive = true,
+        converter = (trampoline, items, consume) => {
+            consume(items.map(item => {
+                return { key: item.key, parts: item.parts, value: item.parts[1] }
+            }))
+        }
+    }) {
+        this._transaction = transaction
         this._direction = direction
         this._previous = { key }
         this._mutation = mutation
+        this._converter = converter
         this._series = 0
         this._inclusive = inclusive
         this._done = false
@@ -133,7 +142,7 @@ class OuterIterator {
         const {
             _mutation: { amalgamator },
             _mutation: { appends },
-            _versions: versions,
+            _transaction: transaction,
             _direction: direction,
             _previous: { key },
             _inclusive: inclusive
@@ -142,7 +151,7 @@ class OuterIterator {
         if (appends.length == 2) {
             additional.push(advance.forward([ appends[1] ]))
         }
-        this._iterator = amalgamator.iterator(versions, direction, key, inclusive, additional)
+        this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
     }
 
     _find (value) {
@@ -162,14 +171,21 @@ class OuterIterator {
             this._series = this._mutation.series
             this._search()
         }
-        const trampoline = new Trampoline, scope = { items: null }
+        const trampoline = new Trampoline, scope = { items: null, converted: null }
         this._iterator.next(trampoline, items => scope.items = items)
         while (trampoline.seek()) {
             await trampoline.shift()
         }
-        return { done: false, value: new InnerIterator(this, scope.items) }
+        if (scope.items != null) {
+            this._converter(trampoline, scope.items, converted => scope.converted = converted)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        return { done: false, value: new InnerIterator(this, scope.converted) }
     }
 }
+
 
 class Snapshot {
     constructor (memento, transaction) {
@@ -189,17 +205,27 @@ class Mutator extends Snapshot {
         this._references = []
     }
 
-    _mutation (key) {
-        const keyified = Keyify.stringify(key)
-        const mutation = this._mutations[keyified]
+    _mutation (name) {
+        const mutation = this._mutations[name]
         if (mutation == null) {
-            const amalgamator = Array.isArray(key)
-                ? this._memento._stores[key[0]].indices[key[1]].amalgamator
-                : this._memento._stores[key].amalgamator
-            return this._mutations[keyified] = {
+            const store = this._memento._stores[name]
+            const indices = {}
+            for (const index in this._memento._stores[name].indices) {
+                indices[index] = {
+                    series: 1,
+                    appends: [[]],
+                    index: store.indices[index],
+                    amalgamator: store.indices[index].amalgamator,
+                    qualifier: [ name, index ]
+                }
+            }
+            return this._mutations[name] = {
                 series: 1,
-                amalgamator: amalgamator,
-                appends: [[]]
+                store: store,
+                amalgamator: store.amalgamator,
+                appends: [[]],
+                qualifier: [ name ],
+                indices: indices
             }
         }
         return mutation
@@ -209,37 +235,43 @@ class Mutator extends Snapshot {
     // new `Amalgamate.iterator()`? Use a count.
     async _merge (mutation) {
         await mutation.amalgamator.merge(this._transaction, mutation.appends[1])
+        mutation.series++
         mutation.appends.pop()
     }
 
     _maybeMerge (mutation, max) {
-        if (mutation.appends[0].length >= max && mutation.appends.length == 1) {
-            mutation.merge++
+        const { appends } = mutation
+        if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
             // TODO Really seems like a queue is appropriate.
-            return this._destructible.ephemeral([ 'merge', mutation.name ], this._merge(mutation))
+            return this._destructible.ephemeral([ 'merge'].concat(mutation.qualifier), this._merge(mutation))
         }
         return null
     }
 
-    _append (mutation, method, key, part) {
+    _append (mutation, method, key, record, value) {
         const compound = [ key, Number.MAX_SAFE_INTEGER, this._index++ ]
         const array = mutation.appends[0]
         const parts = [{
             method: method,
             version: compound[1],
             order: compound[2]
-        }, part ]
+        }, record ]
         const comparator = mutation.amalgamator._comparator.stage
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
-        array.splice(index, 0, { key: compound, parts: parts })
+        array.splice(index, 0, { key: compound, parts, value })
         this._maybeMerge(mutation, 1024)
     }
 
     set (name, record) {
         const mutation = this._mutation(name)
         const key = mutation.amalgamator.strata.extract([ record ])
-        this._append(mutation, 'insert', key, record)
+        this._append(mutation, 'insert', key, record, record)
+        for (const name in mutation.indices) {
+            const index = mutation.indices[name]
+            const key = index.index.extractor([ record ])
+            this._append(index, 'insert', key, key, record)
+        }
     }
 
     unset (name, key) {
@@ -255,9 +287,42 @@ class Mutator extends Snapshot {
 
     forward (name) {
         if (Array.isArray(name)) {
-            const mutation = this._mutation(name)
+            const mutation = this._mutation(name[0])
+            const index = mutation.indices[name[1]]
+            return new OuterIterator({
+                transaction: this._transaction,
+                mutation: index,
+                direction: 'forward',
+                key: null,
+                converter: (trampoline, items, consume) => {
+                    const converted = []
+                    let i = 0
+                    const get = () => {
+                        if (i == items.length) {
+                            consume(converted)
+                        } else {
+                            const key = items[i].key[0].slice(index.index.keyLength)
+                            this._get(name[0], trampoline, key, item => {
+                                assert(item != null)
+                                converted[i] = {
+                                    key: items[i].key,
+                                    parts: items[i].parts,
+                                    value: item.parts[1]
+                                }
+                                i++
+                                trampoline.push(() => get())
+                            })
+                        }
+                    }
+                    get()
+                }
+            })
         }
-        return new OuterIterator(this._transaction, this._mutation(name), 'forward', null)
+        return new OuterIterator({
+            transaction: this._transaction,
+            mutation: this._mutation(name),
+            direction: 'forward'
+        })
     }
 
     _get (name, trampoline, key, consume) {
@@ -292,6 +357,9 @@ class Mutator extends Snapshot {
             await this._destructible.drain()
             for (const mutation of mutations) {
                 this._maybeMerge(mutation, 1)
+                for (const name in mutation.indices) {
+                    this._maybeMerge(mutation.indices[name], 1)
+                }
             }
         } while (this._destructible.ephemerals != 0)
         if (mutations.some(mutation => mutation.conflicted)) {
@@ -622,16 +690,14 @@ class Memento {
             transformer: function (operation) {
                 if (operation.parts[0].method == 'insert') {
                     return {
-                        order: operation.key.order,
                         method: 'insert',
-                        key: operation.key.value,
+                        key: operation.key[0],
                         parts: [ operation.parts[1] ]
                     }
                 }
                 return {
-                    order: operation.key.order,
                     method: 'remove',
-                    key: operation.key.value
+                    key: operation.key[0]
                 }
             },
             createIfMissing: create,
@@ -640,7 +706,9 @@ class Memento {
 
         await amalgamator.ready
 
-        store.indices[name] = { destructible, amalgamator, extractor }
+        store.indices[name] = {
+            destructible, amalgamator, extractor, keyLength: key.comparisons.length
+        }
     }
 
     mutator () {

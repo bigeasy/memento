@@ -1,4 +1,4 @@
-require('proof')(5, async okay => {
+require('proof')(7, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -100,12 +100,12 @@ require('proof')(5, async okay => {
         const insert = presidents.slice(0)
 
         await memento.mutate(async function (mutator) {
-            const gathered = []
 
             mutator.set('employee', insert.shift())
 
             okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
 
+            const gathered = []
             for await (const employees of mutator.forward('employee')) {
                 for (const employee of employees) {
                     gathered.push(employee)
@@ -113,6 +113,15 @@ require('proof')(5, async okay => {
             }
 
             okay(gathered, presidents.slice(0, 1), 'local')
+
+            gathered.length = 0
+            for await (const employees of mutator.forward([ 'employee', 'state' ])) {
+                for (const employee of employees) {
+                    gathered.push(employee)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'local index')
         })
 
         await memento.mutate(async function (mutator) {
@@ -126,6 +135,15 @@ require('proof')(5, async okay => {
             }
 
             okay(gathered, presidents.slice(0, 1), 'staged')
+
+            gathered.length = 0
+            for await (const employees of mutator.forward([ 'employee', 'state' ])) {
+                for (const employee of employees) {
+                    gathered.push(employee)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'staged index')
 
             mutator.rollback()
         })
