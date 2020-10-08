@@ -180,11 +180,10 @@ class Snapshot {
 class Mutator extends Snapshot {
     static instance = 0
 
-    constructor (memento, version) {
+    constructor (memento) {
         super(memento, memento._locker.mutator())
         this._destructible = memento._destructible.opened.ephemeral([ 'mutation', Mutator.instance++ ])
         this._mutations = {}
-        this._version = version
         this._index = 0
         this._references = []
     }
@@ -323,9 +322,9 @@ class Mutator extends Snapshot {
 
 const ASCENSION_TYPE = [ String, Number, BigInt ]
 
-class Schema {
+class Schema extends Mutator {
     constructor (memento) {
-        this._memento = memento
+        super(memento)
     }
 
     _comparisons (extraction) {
@@ -404,7 +403,6 @@ class Memento {
         this._destructible = { opened: null }
         this._stores = {}
         this._cache = new Cache
-        this._version = 1
         this._versions = { '0': true }
         this.directory = options.directory
         this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
@@ -437,6 +435,10 @@ class Memento {
         }
     }
 
+    get _version () {
+        throw new Error
+    }
+
     async open (upgrade = null, version = 1) {
         this._destructible.opened = this.destructible.ephemeral('opened')
         const list = async () => {
@@ -464,7 +466,18 @@ class Memento {
         if (latest < version) {
         }
         if (latest < version && upgrade != null) {
-            await upgrade(new Schema(this), version)
+            const schema = new Schema(this)
+            try {
+                await upgrade(schema, version)
+            } catch (error) {
+                await schema._rollback()
+                if (error === ROLLBACK) {
+                    throw new Memento.Error('rollback')
+                }
+                throw error
+            } finally {
+                await schema.commit()
+            }
         }
     }
 
@@ -635,7 +648,7 @@ class Memento {
     }
 
     async mutate (block) {
-        const mutator = new Mutator(this, this._version++)
+        const mutator = new Mutator(this)
         do {
             try {
                 await block(mutator)
