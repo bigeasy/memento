@@ -1,6 +1,7 @@
 const path = require('path')
 const fs = require('fs').promises
 
+const Trampoline = require('skip')
 const Interrupt = require('interrupt')
 
 const Keyify = require('keyify')
@@ -161,10 +162,10 @@ class OuterIterator {
             this._series = this._mutation.series
             this._search()
         }
-        const promises = [], scope = { items: null }
-        this._iterator.next(promises, items => scope.items = items)
-        while (promises != 0) {
-            await promises.shift()
+        const trampoline = new Trampoline, scope = { items: null }
+        this._iterator.next(trampoline, items => scope.items = items)
+        while (trampoline.seek()) {
+            await trampoline.shift()
         }
         return { done: false, value: new InnerIterator(this, scope.items) }
     }
@@ -259,7 +260,7 @@ class Mutator extends Snapshot {
         return new OuterIterator(this._transaction, this._mutation(name), 'forward', null)
     }
 
-    _get (name, promises, key, consume) {
+    _get (name, trampoline, key, consume) {
         const mutation = this._mutation(name)
         // TODO Expose comparators in Amalgamate.
         const comparators = mutation.amalgamator._comparator
@@ -273,14 +274,14 @@ class Mutator extends Snapshot {
                 }
             }
         }
-        mutation.amalgamator.get(this._transaction, promises, key, consume)
+        mutation.amalgamator.get(this._transaction, trampoline, key, consume)
     }
 
     async get (name, key) {
-        const promises = [], scope = { item: null }
-        this._get(name, promises, key, item => scope.item = item)
-        while (promises.length != 0) {
-            await promises.shift()
+        const trampoline = new Trampoline, scope = { item: null }
+        this._get(name, trampoline, key, item => scope.item = item)
+        while (trampoline.seek()) {
+            await trampoline.shift()
         }
         return scope.item == null ? null : scope.item.parts[1]
     }
