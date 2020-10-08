@@ -19,6 +19,8 @@ const coalesce = require('extant')
 
 const ascension = require('ascension')
 
+const ROLLBACK = Symbol('rollback')
+
 
 function find (comparator, array, key, low, high) {
     let mid
@@ -303,7 +305,11 @@ class Mutator extends Snapshot {
         return true
     }
 
-    async rollback () {
+    rollback () {
+        throw ROLLBACK
+    }
+
+    async _rollback () {
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         do {
             await this._destructible.drain()
@@ -626,6 +632,21 @@ class Memento {
     mutator () {
         Memento.Error.assert(!this.destructible.destroyed, 'destroyed')
         return new Mutator(this, this._version++)
+    }
+
+    async mutate (block) {
+        const mutator = new Mutator(this, this._version++)
+        do {
+            try {
+                await block(mutator)
+            } catch (error) {
+                await mutator._rollback()
+                if (error === ROLLBACK) {
+                    return
+                }
+                throw error
+            }
+        } while (! await mutator.commit())
     }
 }
 

@@ -99,30 +99,23 @@ require('proof')(5, async okay => {
     destructible.durable('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
 
-        {
+        await memento.mutate(async function (mutator) {
             const gathered = []
 
-            const mutator = memento.mutator()
+            mutator.set('employee', insert.shift())
 
-            do {
-                gathered.length = 0
+            okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
 
-                mutator.set('employee', insert.shift())
-
-                okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
-
-                for await (const employees of mutator.forward('employee')) {
-                    for (const employee of employees) {
-                        gathered.push(employee)
-                    }
+            for await (const employees of mutator.forward('employee')) {
+                for (const employee of employees) {
+                    gathered.push(employee)
                 }
-            } while (! await mutator.commit())
+            }
 
             okay(gathered, presidents.slice(0, 1), 'local')
-        }
+        })
 
-        {
-            const mutator = memento.mutator()
+        await memento.mutate(async function (mutator) {
             const gathered = []
 
             okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
@@ -131,9 +124,11 @@ require('proof')(5, async okay => {
                     gathered.push(employee)
                 }
             }
-            mutator.rollback()
+
             okay(gathered, presidents.slice(0, 1), 'staged')
-        }
+
+            mutator.rollback()
+        })
     }))
 
     await memento.destructible.rejected
