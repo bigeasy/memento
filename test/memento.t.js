@@ -1,4 +1,4 @@
-require('proof')(3, async okay => {
+require('proof')(5, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
