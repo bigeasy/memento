@@ -1,4 +1,4 @@
-require('proof')(7, async okay => {
+require('proof')(8, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -84,7 +84,7 @@ require('proof')(7, async okay => {
     const memento = new Memento(destructible.durable('memento'), {
         directory: directory,
         comparators: {
-            text: (left, right) => (left < right) - (left > right)
+            text: (left, right) => (left > right) - (left < right)
         }
     })
     await memento.open(async (schema, version) => {
@@ -146,6 +146,21 @@ require('proof')(7, async okay => {
             okay(gathered, presidents.slice(0, 1), 'staged index')
 
             mutator.rollback()
+        })
+
+        await memento.mutate(async mutator => {
+            for (let i = 0; i < 15; i++) {
+                mutator.set('employee', insert.shift())
+            }
+
+            const gathered = []
+            for await (const presidents of mutator.forward('employee')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            const expected = presidents.slice(0, 16).map(president => president.lastName).sort()
+            okay(gathered, expected, 'insert and interate many')
         })
     }))
 

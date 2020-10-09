@@ -41,11 +41,21 @@ class InnerIterator {
     constructor (outer, items) {
         this._outer = outer
         this._series = outer._mutation.series
+        this._compare = outer._mutation.amalgamator._comparator.stage
         this._items = items == null ? null : { array: items, index: 0 }
     }
 
     [Symbol.iterator] () {
         return this
+    }
+
+    get reversed () {
+        return this._outer._direction == 'reverse'
+    }
+
+    set reversed (value) {
+        this._outer._direction = value ? 'reverse' : 'forward'
+        this._outer._series = this._series = 0
     }
 
     // The problem with advancing over our in-memory or file backed stage is
@@ -84,17 +94,16 @@ class InnerIterator {
         const candidates = []
         if (this._items != null) {
             if (this._items.array.length == this._items.index) {
-                if (!this._done) {
-                    return { done: true, value: null }
-                }
+                return { done: true, value: null }
             } else {
                 candidates.push(this._items)
             }
         }
         const array = this._outer._mutation.appends[0]
+        const comparator = this._outer._mutation.amalgamator._comparator.stage
         let { index, found } = this._outer._previous.key == null
             ? { index: 0, found: false }
-            : this._outer._find(this._outer._previous)
+            : find(comparator, array, this._outer._previous.key, 0, array.length - 1)
         if (found) {
             index++
         }
@@ -102,13 +111,13 @@ class InnerIterator {
             candidates.push({ array, index })
         }
         if (candidates.length == 0) {
-            if (this._items == null) {
-                this._outer._done = true
-            }
+            this._outer._done = true
             return { done: true, value: null }
         }
-        candidates.sort((left, right) => this._compare(left, right))
-        const candidate = candidates.pop()
+        candidates.sort((left, right) => {
+            return comparator(left.array[left.index].key, right.array[right.index].key)
+        })
+        const candidate = candidates.shift()
         this._outer._previous = candidate.array[candidate.index++]
         return { done: false, value: this._outer._previous.value }
     }
@@ -152,15 +161,6 @@ class OuterIterator {
             additional.push(advance.forward([ appends[1] ]))
         }
         this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
-    }
-
-    _find (value) {
-        if (value == null) {
-            return { index: 0, found: false }
-        }
-        const comparator = this._mutation.amalgamator._comparator.stage
-        const array = this._mutation.appends[0]
-        return find(comparator, array, value.key, 0, array.length - 1)
     }
 
     async next () {
