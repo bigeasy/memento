@@ -727,11 +727,6 @@ class Memento {
         }
     }
 
-    mutator () {
-        Memento.Error.assert(!this.destructible.destroyed, 'destroyed')
-        return new Mutator(this, this._version++)
-    }
-
     async mutate (block) {
         const mutator = new Mutator(this)
         do {
