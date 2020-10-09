@@ -43,6 +43,7 @@ class InnerIterator {
         this._series = outer._mutation.series
         this._compare = outer._mutation.amalgamator._comparator.stage
         this._items = items == null ? null : { array: items, index: 0 }
+        this._direction = this._outer._direction == 'reverse' ? -1 : 1
     }
 
     [Symbol.iterator] () {
@@ -54,8 +55,12 @@ class InnerIterator {
     }
 
     set reversed (value) {
-        this._outer._direction = value ? 'reverse' : 'forward'
-        this._outer._series = this._series = 0
+        const direction = value ? 'reverse' : 'forward'
+        if (direction != this._outer._direction) {
+            this._outer._direction = direction
+            this._outer._series = this._series = 0
+            this._outer._done = false
+        }
     }
 
     // The problem with advancing over our in-memory or file backed stage is
@@ -102,12 +107,12 @@ class InnerIterator {
         const array = this._outer._mutation.appends[0]
         const comparator = this._outer._mutation.amalgamator._comparator.stage
         let { index, found } = this._outer._previous.key == null
-            ? { index: 0, found: false }
+            ? { index: this._direction == 1 ? 0 : array.length, found: false }
             : find(comparator, array, this._outer._previous.key, 0, array.length - 1)
-        if (found) {
-            index++
+        if (found || this._direction == -1) {
+            index += this._direction
         }
-        if (index < array.length) {
+        if (0 <= index && index < array.length) {
             candidates.push({ array, index })
         }
         if (candidates.length == 0) {
@@ -115,9 +120,12 @@ class InnerIterator {
             return { done: true, value: null }
         }
         candidates.sort((left, right) => {
-            return comparator(left.array[left.index].key, right.array[right.index].key)
+            return comparator(left.array[left.index].key, right.array[right.index].key) * this._direction
         })
         const candidate = candidates.shift()
+        // We always increment the index because Strata iterators return the
+        // values reversed but we search our in-memory stage each time we
+        // descend.
         this._outer._previous = candidate.array[candidate.index++]
         return { done: false, value: this._outer._previous.value }
     }
@@ -285,14 +293,14 @@ class Mutator extends Snapshot {
         }, key ])
     }
 
-    forward (name) {
+    _iterator (name, vargs, direction) {
         if (Array.isArray(name)) {
             const mutation = this._mutation(name[0])
             const index = mutation.indices[name[1]]
             return new OuterIterator({
                 transaction: this._transaction,
                 mutation: index,
-                direction: 'forward',
+                direction: direction,
                 key: null,
                 converter: (trampoline, items, consume) => {
                     const converted = []
@@ -321,8 +329,16 @@ class Mutator extends Snapshot {
         return new OuterIterator({
             transaction: this._transaction,
             mutation: this._mutation(name),
-            direction: 'forward'
+            direction: direction
         })
+    }
+
+    forward (name, ...vargs) {
+        return this._iterator(name, vargs, 'forward')
+    }
+
+    reverse (name, ...vargs) {
+        return this._iterator(name, vargs, 'reverse')
     }
 
     _get (name, trampoline, key, consume) {

@@ -1,4 +1,4 @@
-require('proof')(8, async okay => {
+require('proof')(14, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -112,10 +112,28 @@ require('proof')(8, async okay => {
                 }
             }
 
-            okay(gathered, presidents.slice(0, 1), 'local')
+            okay(gathered, presidents.slice(0, 1), 'local reverse')
+
+            gathered.length = 0
+            for await (const presidents of mutator.reverse('employee')) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'local reverse')
 
             gathered.length = 0
             for await (const employees of mutator.forward([ 'employee', 'state' ])) {
+                for (const employee of employees) {
+                    gathered.push(employee)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'local index')
+
+            gathered.length = 0
+            for await (const employees of mutator.reverse([ 'employee', 'state' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -159,8 +177,51 @@ require('proof')(8, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            const expected = presidents.slice(0, 16).map(president => president.lastName).sort()
-            okay(gathered, expected, 'insert and interate many')
+            const states = presidents.slice(0, 16).map(president => president.state)
+            const expected = {
+                names: presidents.slice(0, 16).map(president => president.lastName).sort(),
+                states: states.filter((state, index) => states.indexOf(state) == index).sort()
+            }
+            okay(gathered, expected.names, 'insert and interate many forward')
+
+            gathered.length = 0
+            for await (const presidents of mutator.reverse('employee')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            okay(gathered, expected.names.slice(0).reverse(), 'insert and interate many reverse')
+
+            gathered.length = 0
+            for await (const presidents of mutator.forward([ 'employee', 'state' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.state)
+                }
+            }
+            okay(gathered.filter((state, index) => {
+                return gathered.indexOf(state) == index
+            }), expected.states, 'insert and interate many index forward')
+
+            gathered.length = 0
+            for await (const presidents of mutator.reverse([ 'employee', 'state' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.state)
+                }
+            }
+            okay(gathered.filter((state, index) => {
+                return gathered.indexOf(state) == index
+            }), expected.states.slice(0).reverse(), 'insert and interate many index reverse')
+
+            gathered.length = 0
+            for await (const presidents of mutator.forward('employee')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+                if (gathered.length == 16) {
+                    presidents.reversed = true
+                }
+            }
+            okay(gathered, expected.names.concat(expected.names.slice(0).reverse()), 'insert and interate many forward')
         })
     }))
 
