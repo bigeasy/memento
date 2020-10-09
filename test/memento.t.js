@@ -1,4 +1,4 @@
-require('proof')(14, async okay => {
+require('proof')(15, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -98,6 +98,18 @@ require('proof')(14, async okay => {
 
     destructible.durable('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
+
+        {
+            const test = []
+            try {
+                await memento.mutate(() => {
+                    throw new Error('error')
+                })
+            } catch (error) {
+                test.push(error.message)
+            }
+            okay(test, [ 'error' ], 'rethrow error')
+        }
 
         await memento.mutate(async function (mutator) {
 
