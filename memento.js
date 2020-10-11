@@ -727,7 +727,7 @@ class Memento {
         }
     }
 
-    async mutate (block) {
+    async mutator (block) {
         const mutator = new Mutator(this)
         do {
             try {

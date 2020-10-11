@@ -102,7 +102,7 @@ require('proof')(15, async okay => {
         {
             const test = []
             try {
-                await memento.mutate(() => {
+                await memento.mutator(() => {
                     throw new Error('error')
                 })
             } catch (error) {
@@ -111,7 +111,7 @@ require('proof')(15, async okay => {
             okay(test, [ 'error' ], 'rethrow error')
         }
 
-        await memento.mutate(async function (mutator) {
+        await memento.mutator(async function (mutator) {
 
             mutator.set('employee', insert.shift())
 
@@ -154,7 +154,7 @@ require('proof')(15, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local index')
         })
 
-        await memento.mutate(async function (mutator) {
+        await memento.mutator(async function (mutator) {
             const gathered = []
 
             okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
@@ -178,7 +178,7 @@ require('proof')(15, async okay => {
             mutator.rollback()
         })
 
-        await memento.mutate(async mutator => {
+        await memento.mutator(async mutator => {
             for (let i = 0; i < 15; i++) {
                 mutator.set('employee', insert.shift())
             }
