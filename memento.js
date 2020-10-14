@@ -13,6 +13,7 @@ const Cache = require('b-tree/cache')
 
 const Locker = require('amalgamate/locker')
 const Amalgamator = require('amalgamate')
+const Journalist = require('journalist')
 
 const rescue = require('rescue')
 
@@ -207,7 +208,7 @@ class Mutator extends Snapshot {
 
     constructor (memento) {
         super(memento, memento._locker.mutator())
-        this._destructible = memento._destructible.opened.ephemeral([ 'mutation', Mutator.instance++ ])
+        this._destructible = memento._destructible.ephemeral([ 'mutation', Mutator.instance++ ])
         this._mutations = {}
         this._index = 0
         this._references = []
@@ -386,6 +387,7 @@ class Mutator extends Snapshot {
         }
         // TODO Here goes your commit write *before* you call in-memory commit.
         this._memento._locker.commit(this._transaction)
+        this._destructible.destroy()
         return true
     }
 
@@ -402,15 +404,17 @@ class Mutator extends Snapshot {
             }
         } while (this._destructible.ephemerals != 0)
         this._memento._locker.rollback(this._transaction)
+        this._destructible.destroy()
     }
 }
 
 const ASCENSION_TYPE = [ String, Number, BigInt ]
 
 class Schema extends Mutator {
-    constructor (memento, version) {
+    constructor (journalist, memento, version) {
         super(memento)
         this.version = version
+        this._journalist = journalist
     }
 
     _comparisons (extraction) {
@@ -447,20 +451,22 @@ class Schema extends Mutator {
 
     // TODO Need a rollback interface.
     async store (name, extraction) {
+        Memento.Error.assert(this._memento._stores[name] == null, 'store already exists')
+        const directory = (await this._journalist.mkdir(path.join('stores', name))).absolute
         const comparisons = this._comparisons(extraction)
-        const directory = path.join(this._memento.directory, 'stores', name)
-        await fs.mkdir(directory, { recursive: true })
+        await fs.mkdir(path.join(directory, 'store'))
         await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
-        await this._memento._store(name, true)
+        await this._memento._store(name, directory, true)
     }
 
-    async index ([ storeName, name ], extraction, options = {}) {
+    async index (name, extraction, options = {}) {
+        Memento.Error.assert(this._memento._stores[name[0]] != null, 'store does not exist')
+        Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, 'index already exists')
+        const directory = (await this._journalist.mkdir(path.join('indices', name[0], name[1]))).absolute
         const comparisons = this._comparisons(extraction)
-        const store = this._memento._stores[storeName]
-        const directory = path.join(this._memento.directory, 'indices', storeName, name)
-        await fs.mkdir(directory, { recursive: true })
+        await fs.mkdir(path.join(directory, 'store'))
         await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify({ comparisons, options }))
-        await this._memento._index([ storeName, name ], true)
+        await this._memento._index(name, directory, true)
     }
 
     async remove (name) {
@@ -478,15 +484,7 @@ class Memento {
 
     constructor (options) {
         this.destructible = options.destructible
-        this.destructible.operative++
-        this.destructible.destruct(() => {
-            this.destructible.ephemeral('shutdown', async () => {
-                await this._locker.drain()
-                await this._locker.rotate()
-                this.destructible.operative--
-            })
-        })
-        this._destructible = { opened: null }
+        this._destructible = null
         this._stores = {}
         this._cache = new Cache
         this._versions = { '0': true }
@@ -522,13 +520,81 @@ class Memento {
     }
 
     static async open ({
+        destructible = new Destructible('memento'),
         directory,
-        comparators = {},
         version = 1,
-        destructible = new Destructible('memento')
+        comparators = {}
     } = {}, upgrade) {
+        const journalist = await Journalist.create(directory)
+        await Journalist.prepare(journalist)
+        await Journalist.commit(journalist)
+        await journalist.dispose()
         const memento = new Memento({ destructible, directory, comparators })
-        await memento._open(upgrade, version)
+        memento._destructible = memento.destructible.ephemeral('opened')
+        memento._destructible.operative++
+        memento._destructible.destruct(() => {
+            memento._destructible.ephemeral('shutdown', async () => {
+                await memento._locker.drain()
+                await memento._locker.rotate()
+                memento._destructible.operative--
+            })
+        })
+        const list = async () => {
+            try {
+                return await fs.readdir(memento.directory)
+            } catch (error) {
+                rescue(error, [{ code: 'ENOENT' }])
+                await fs.mdkir(memento.directory, { recursive: true })
+                return await list()
+            }
+        }
+        const subdirs = [ 'versions', 'stores', 'indices' ].sort()
+        const dirs = await list()
+        if (dirs.length == 0) {
+            for (const dir of subdirs) {
+                await fs.mkdir(path.resolve(memento.directory, dir))
+            }
+            await fs.mkdir(path.resolve(memento.directory, './versions/0'))
+        } else {
+            for (const store of (await fs.readdir(path.join(directory, 'stores')))) {
+                await memento._store(store, path.join(directory, 'stores', store))
+            }
+            for (const store of (await fs.readdir(path.join(directory, 'indices')))) {
+                for (const index of (await fs.readdir(path.join(directory, 'indices', store)))) {
+                    await memento._index([ store, index ], path.join(directory, 'indices', store, index))
+                }
+            }
+        }
+        const versions = await fs.readdir(path.resolve(memento.directory, 'versions'))
+        const latest = versions.sort((left, right) => +left - +right).pop()
+        if (latest < version) {
+        }
+        if (latest < version && upgrade != null) {
+            const journalist = await Journalist.create(memento.directory)
+            const schema = new Schema(journalist, memento, version)
+            try {
+                await upgrade(schema)
+                await schema.commit()
+                await journalist.mkdir(path.join('versions', String(version)))
+                await journalist.write()
+                await Journalist.prepare(journalist)
+                await Journalist.commit(journalist)
+                await journalist.dispose()
+                await memento._destructible.destroy().rejected
+                return await Memento.open({
+                    destructible,
+                    directory,
+                    version,
+                    comparators
+                }, upgrade)
+            } catch (error) {
+                await schema._rollback()
+                if (error === ROLLBACK) {
+                    throw new Memento.Error('rollback')
+                }
+                throw error
+            }
+        }
         return memento
     }
 
@@ -537,51 +603,10 @@ class Memento {
     }
 
     async _open (upgrade, version) {
-        this._destructible.opened = this.destructible.ephemeral('opened')
-        const list = async () => {
-            try {
-                return await fs.readdir(this.directory)
-            } catch (error) {
-                rescue(error, [{ code: 'ENOENT' }])
-                await fs.mdkir(this.directory, { recursive: true })
-                return await list()
-            }
-        }
-        const subdirs = [ 'versions', 'stores' ].sort()
-        const dirs = await list()
-        if (dirs.length == 0) {
-            for (const dir of subdirs) {
-                await fs.mkdir(path.resolve(this.directory, dir))
-            }
-            await fs.mkdir(path.resolve(this.directory, './versions/0'))
-        } else {
-            for (const dir of (await list()).sort()) {
-            }
-        }
-        const versions = await fs.readdir(path.resolve(this.directory, 'versions'))
-        const latest = versions.map(version => +version).sort().pop()
-        if (latest < version) {
-        }
-        if (latest < version && upgrade != null) {
-            const schema = new Schema(this, version)
-            try {
-                await upgrade(schema)
-            } catch (error) {
-                await schema._rollback()
-                if (error === ROLLBACK) {
-                    throw new Memento.Error('rollback')
-                }
-                throw error
-            } finally {
-                await schema.commit()
-            }
-        }
     }
 
-    async _store (name, create = false) {
-        const directory = path.join(this.directory, 'stores', name)
+    async _store (name, directory, create = false) {
         const comparisons = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
-        await fs.mkdir(path.join(directory, 'store'))
 
         const extractors = comparisons.map(part => {
             return function (object) {
@@ -608,8 +633,7 @@ class Memento {
             return object
         })
 
-        // Needs to be ephemeral in order to support `rename`.
-        const destructible = this._destructible.opened.durable([ 'store', name ])
+        const destructible = this._destructible.durable([ 'store', name ])
 
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,
@@ -655,10 +679,8 @@ class Memento {
         this._stores[name] = { destructible, amalgamator, indices: {}, comparisons }
     }
 
-    async _index ([ storeName, name ], create = false) {
-        const directory = path.join(this.directory, 'indices', storeName, name)
+    async _index ([ storeName, name ], directory, create = false) {
         const key = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
-        await fs.mkdir(path.join(directory, 'store'))
 
         const store = this._stores[storeName]
 
@@ -691,8 +713,7 @@ class Memento {
             return object
         })
 
-        // Needs to be ephemeral in order to support `rename`.
-        const destructible = this._destructible.opened.durable([ 'store', name ])
+        const destructible = this._destructible.durable([ 'store', name ])
 
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,

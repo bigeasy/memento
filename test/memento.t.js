@@ -1,4 +1,4 @@
-require('proof')(15, async okay => {
+require('proof')(16, async okay => {
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -80,22 +80,36 @@ require('proof')(15, async okay => {
     await fs.rmdir(directory, { recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
-    const destructible = new Destructible(1000, 'memento.t')
-    const memento = await Memento.open({
-        version: 1,
-        destructible: destructible.durable('memento'),
-        directory: directory,
-        comparators: {
-            text: (left, right) => (left > right) - (left < right)
-        }
-    }, async (schema) => {
-        switch (schema.version) {
-        case 1:
-            await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
-            await schema.index([ 'employee', 'state' ], { state: String })
-            break
-        }
-    })
+    const destructible = new Destructible(5000, 'memento.t')
+    function createMemento (rollback = false) {
+        return Memento.open({
+            version: 1,
+            destructible: destructible.durable('memento'),
+            directory: directory,
+            comparators: {
+                text: (left, right) => (left > right) - (left < right)
+            }
+        }, async (schema) => {
+            switch (schema.version) {
+            case 1:
+                await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
+                await schema.index([ 'employee', 'state' ], { state: String })
+                if (rollback) {
+                    schema.rollback()
+                }
+                break
+            }
+        })
+    }
+
+    const errors = []
+    try {
+        await createMemento(true)
+    } catch (error) {
+        errors.push(/^rollback$/m.test(error.message))
+    }
+    okay(errors, [ true ], 'rollback open')
+    const memento = await createMemento()
 
     destructible.durable('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
