@@ -476,8 +476,8 @@ class Memento {
     static DSC = Symbol('decending')
     static Error = Interrupt.create('Memento.Error')
 
-    constructor (destructible, options = {}) {
-        this.destructible = destructible
+    constructor (options) {
+        this.destructible = options.destructible
         this.destructible.operative++
         this.destructible.destruct(() => {
             this.destructible.ephemeral('shutdown', async () => {
@@ -521,11 +521,22 @@ class Memento {
         }
     }
 
+    static async open ({
+        directory,
+        comparators = {},
+        version = 1,
+        destructible = new Destructible('memento')
+    } = {}, upgrade) {
+        const memento = new Memento({ destructible, directory, comparators })
+        await memento._open(upgrade, version)
+        return memento
+    }
+
     get _version () {
         throw new Error
     }
 
-    async open (upgrade = null, version = 1) {
+    async _open (upgrade, version) {
         this._destructible.opened = this.destructible.ephemeral('opened')
         const list = async () => {
             try {

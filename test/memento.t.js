@@ -81,20 +81,21 @@ require('proof')(15, async okay => {
     await fs.mkdir(directory, { recursive: true })
 
     const destructible = new Destructible(1000, 'memento.t')
-    const memento = new Memento(destructible.durable('memento'), {
+    const memento = await Memento.open({
+        version: 1,
+        destructible: destructible.durable('memento'),
         directory: directory,
         comparators: {
             text: (left, right) => (left > right) - (left < right)
         }
-    })
-    await memento.open(async (schema) => {
+    }, async (schema) => {
         switch (schema.version) {
         case 1:
             await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
             await schema.index([ 'employee', 'state' ], { state: String })
             break
         }
-    }, 1)
+    })
 
     destructible.durable('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
