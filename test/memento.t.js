@@ -87,8 +87,8 @@ require('proof')(15, async okay => {
             text: (left, right) => (left > right) - (left < right)
         }
     })
-    await memento.open(async (schema, version) => {
-        switch (version) {
+    await memento.open(async (schema) => {
+        switch (schema.version) {
         case 1:
             await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
             await schema.index([ 'employee', 'state' ], { state: String })

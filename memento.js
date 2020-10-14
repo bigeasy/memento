@@ -408,8 +408,9 @@ class Mutator extends Snapshot {
 const ASCENSION_TYPE = [ String, Number, BigInt ]
 
 class Schema extends Mutator {
-    constructor (memento) {
+    constructor (memento, version) {
         super(memento)
+        this.version = version
     }
 
     _comparisons (extraction) {
@@ -551,9 +552,9 @@ class Memento {
         if (latest < version) {
         }
         if (latest < version && upgrade != null) {
-            const schema = new Schema(this)
+            const schema = new Schema(this, version)
             try {
-                await upgrade(schema, version)
+                await upgrade(schema)
             } catch (error) {
                 await schema._rollback()
                 if (error === ROLLBACK) {
