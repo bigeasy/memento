@@ -24,7 +24,7 @@
                             "amalgamate":                   "^0.1.18",
                             "ascension":                    "^2.0.0",
                             "avenue":                       "^0.4.0",
-                            "b-tree":                       "^2.0.0-alpha.45",
+                            "b-tree":                       "^2.0.0-alpha.50",
                             "destructible":                 "^7.0.0-alpha.11",
                             "interrupt":                    "^10.1.0",
                             "keyify":                       "^2.0.4",
