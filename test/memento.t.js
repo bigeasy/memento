@@ -236,7 +236,13 @@ require('proof')(15, async okay => {
             }
             okay(gathered, expected.names.concat(expected.names.slice(0).reverse()), 'insert and interate many forward')
         })
+
+        try {
+            await memento.close()
+        } catch (error) {
+            console.log(error.stack)
+        }
     }))
 
-    await memento.destructible.rejected
+    await destructible.rejected
 })

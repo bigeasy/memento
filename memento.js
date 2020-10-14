@@ -753,6 +753,10 @@ class Memento {
             }
         } while (! await mutator.commit())
     }
+
+    async close () {
+        await this.destructible.destroy().rejected
+    }
 }
 
 module.exports = Memento
