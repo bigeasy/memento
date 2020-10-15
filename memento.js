@@ -208,7 +208,8 @@ class Mutator extends Snapshot {
 
     constructor (memento) {
         super(memento, memento._locker.mutator())
-        this._destructible = memento._destructible.ephemeral([ 'mutation', Mutator.instance++ ])
+        this._destructible = memento._destructible.mutators.ephemeral([ 'mutation', Mutator.instance++ ])
+        this._destructible.increment()
         this._mutations = {}
         this._index = 0
         this._references = []
@@ -387,7 +388,8 @@ class Mutator extends Snapshot {
         }
         // TODO Here goes your commit write *before* you call in-memory commit.
         this._memento._locker.commit(this._transaction)
-        this._destructible.destroy()
+        this._destructible.decrement()
+        this._destructible.decrement()
         return true
     }
 
@@ -404,7 +406,8 @@ class Mutator extends Snapshot {
             }
         } while (this._destructible.ephemerals != 0)
         this._memento._locker.rollback(this._transaction)
-        this._destructible.destroy()
+        this._destructible.decrement()
+        this._destructible.decrement()
     }
 }
 
@@ -549,13 +552,29 @@ class Memento {
         await Journalist.commit(journalist)
         await journalist.dispose()
         const memento = new Memento({ destructible, directory, comparators })
-        memento._destructible = memento.destructible.ephemeral('opened')
-        memento._destructible.operative++
-        memento._destructible.destruct(() => {
-            memento._destructible.ephemeral('shutdown', async () => {
+        const open = destructible.ephemeral('open')
+        memento._destructible = {
+            open: open,
+            amalgamators: open.durable('amalgamators'),
+            mutators: open.durable('mutators')
+        }
+        open.destruct(() => {
+            // Destroying the amalgamators and mutators Destructible will
+            // prevent new stores, indices or mutations from being created.
+            memento._destructible.amalgamators.destroy()
+            memento._destructible.mutators.destroy()
+            // Wait for the mutations to drain, make a final rotation of the
+            // amagamators, then destroy all the amalgamators.
+            open.ephemeral('shutdown', async () => {
+                await memento._destructible.mutators.drain()
                 await memento._locker.drain()
                 await memento._locker.rotate()
-                memento._destructible.operative--
+                for (const store in memento._stores) {
+                    memento._stores[store].destructible.decrement()
+                    for (const index in memento._stores[store].indices) {
+                        memento._stores[store].indices[index].destructible.decrement()
+                    }
+                }
             })
         })
         const list = async () => {
@@ -599,7 +618,7 @@ class Memento {
                 await Journalist.prepare(journalist)
                 await Journalist.commit(journalist)
                 await journalist.dispose()
-                await memento._destructible.destroy().rejected
+                await memento._destructible.open.destroy().rejected
                 return await Memento.open({
                     destructible,
                     directory,
@@ -652,7 +671,8 @@ class Memento {
             return object
         })
 
-        const destructible = this._destructible.durable([ 'store', name ])
+        const destructible = this._destructible.amalgamators.durable([ 'store', name ])
+        destructible.increment()
 
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,
@@ -730,7 +750,8 @@ class Memento {
             return object
         })
 
-        const destructible = this._destructible.durable([ 'store', name ])
+        const destructible = this._destructible.amalgamators.durable([ 'store', name ])
+        destructible.increment()
 
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,
