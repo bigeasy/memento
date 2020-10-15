@@ -72,7 +72,6 @@ require('proof')(16, async okay => {
 
     const Memento = require('..')
 
-
     okay(Memento, 'require')
 
     const directory = path.resolve(__dirname, './tmp/memento')
@@ -94,10 +93,13 @@ require('proof')(16, async okay => {
             case 1:
                 await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
                 await schema.index([ 'employee', 'state' ], { state: String })
-                if (rollback) {
-                    schema.rollback()
-                }
+                await schema.rename('employee', 'president')
                 break
+            case 2:
+                break
+            }
+            if (rollback) {
+                schema.rollback()
             }
         })
     }
@@ -128,12 +130,12 @@ require('proof')(16, async okay => {
 
         await memento.mutator(async function (mutator) {
 
-            mutator.set('employee', insert.shift())
+            mutator.set('president', insert.shift())
 
-            okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
+            okay(await mutator.get('president', [ 'Washington', 'George' ]), presidents[0], 'get')
 
             const gathered = []
-            for await (const employees of mutator.forward('employee')) {
+            for await (const employees of mutator.forward('president')) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -142,7 +144,7 @@ require('proof')(16, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse('employee')) {
+            for await (const presidents of mutator.reverse('president')) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -151,7 +153,7 @@ require('proof')(16, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local reverse')
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'employee', 'state' ])) {
+            for await (const employees of mutator.forward([ 'president', 'state' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -160,7 +162,7 @@ require('proof')(16, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local index')
 
             gathered.length = 0
-            for await (const employees of mutator.reverse([ 'employee', 'state' ])) {
+            for await (const employees of mutator.reverse([ 'president', 'state' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -172,8 +174,8 @@ require('proof')(16, async okay => {
         await memento.mutator(async function (mutator) {
             const gathered = []
 
-            okay(await mutator.get('employee', [ 'Washington', 'George' ]), presidents[0], 'get')
-            for await (const employees of mutator.forward('employee')) {
+            okay(await mutator.get('president', [ 'Washington', 'George' ]), presidents[0], 'get')
+            for await (const employees of mutator.forward('president')) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -182,7 +184,7 @@ require('proof')(16, async okay => {
             okay(gathered, presidents.slice(0, 1), 'staged')
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'employee', 'state' ])) {
+            for await (const employees of mutator.forward([ 'president', 'state' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -195,11 +197,11 @@ require('proof')(16, async okay => {
 
         await memento.mutator(async mutator => {
             for (let i = 0; i < 15; i++) {
-                mutator.set('employee', insert.shift())
+                mutator.set('president', insert.shift())
             }
 
             const gathered = []
-            for await (const presidents of mutator.forward('employee')) {
+            for await (const presidents of mutator.forward('president')) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -212,7 +214,7 @@ require('proof')(16, async okay => {
             okay(gathered, expected.names, 'insert and interate many forward')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse('employee')) {
+            for await (const presidents of mutator.reverse('president')) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -220,7 +222,7 @@ require('proof')(16, async okay => {
             okay(gathered, expected.names.slice(0).reverse(), 'insert and interate many reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.forward([ 'employee', 'state' ])) {
+            for await (const presidents of mutator.forward([ 'president', 'state' ])) {
                 for (const president of presidents) {
                     gathered.push(president.state)
                 }
@@ -230,7 +232,7 @@ require('proof')(16, async okay => {
             }), expected.states, 'insert and interate many index forward')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse([ 'employee', 'state' ])) {
+            for await (const presidents of mutator.reverse([ 'president', 'state' ])) {
                 for (const president of presidents) {
                     gathered.push(president.state)
                 }
@@ -240,7 +242,7 @@ require('proof')(16, async okay => {
             }), expected.states.slice(0).reverse(), 'insert and interate many index reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.forward('employee')) {
+            for await (const presidents of mutator.forward('president')) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }

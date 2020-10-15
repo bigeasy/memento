@@ -474,6 +474,17 @@ class Schema extends Mutator {
 
     // TODO Would need to close completely, then rename and reopen.
     async rename (from, to) {
+        if (Array.isArray(from)) {
+        } else {
+            Memento.Error.assert(this._memento._stores[from] != null, 'store does not exist')
+            Memento.Error.assert(this._memento._stores[to] == null, 'store already exists')
+            const store = this._memento._stores[to] = this._memento._stores[from]
+            delete this._memento._stores[from]
+            await this._journalist.rename(path.join('stores', from), path.join('stores', to))
+            for (const name in store.indices) {
+                await this._journalist.rename(path.join('indices', from, name), path.join('indices', to, name))
+            }
+        }
     }
 }
 
@@ -685,8 +696,6 @@ class Memento {
         const store = this._stores[storeName]
 
         const comparisons = key.comparisons.concat(store.comparisons)
-
-        console.log(comparisons)
 
         const extractors = comparisons.map(part => {
             return function (object) {
