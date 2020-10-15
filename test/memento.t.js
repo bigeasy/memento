@@ -92,8 +92,9 @@ require('proof')(16, async okay => {
             switch (schema.version) {
             case 1:
                 await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
-                await schema.index([ 'employee', 'state' ], { state: String })
+                await schema.index([ 'employee', 'place' ], { state: String })
                 await schema.rename('employee', 'president')
+                await schema.rename(['president', 'place' ], [ 'president', 'state' ])
                 break
             case 2:
                 break

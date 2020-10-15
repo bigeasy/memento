@@ -21,13 +21,13 @@
     },
     "dependencies":
     {
-                            "amalgamate":                   "^0.1.23",
+                            "amalgamate":                   "^0.1.24",
                             "ascension":                    "^2.0.0",
                             "avenue":                       "^0.4.0",
-                            "b-tree":                       "^2.0.0-alpha.51",
+                            "b-tree":                       "^2.0.0-alpha.52",
                             "destructible":                 "^7.0.0-alpha.11",
                             "interrupt":                    "^10.1.0",
-                            "journalist":                   "0.1.3",
+                            "journalist":                   "0.1.5",
                             "keyify":                       "^2.0.4",
                             "rescue":                       "^7.0.0-alpha.1",
                             "skip":                         "0.1.0"

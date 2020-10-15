@@ -469,12 +469,17 @@ class Schema extends Mutator {
         await this._memento._index(name, directory, true)
     }
 
-    async remove (name) {
-    }
-
     // TODO Would need to close completely, then rename and reopen.
     async rename (from, to) {
         if (Array.isArray(from)) {
+            Memento.Error.assert(from[0] == to[0], 'the stores for an index move must be the same')
+            Memento.Error.assert(this._memento._stores[from[0]] != null, 'store does not exist')
+            Memento.Error.assert(this._memento._stores[from[0]].indices[from[1]] != null, 'index does not exist')
+            Memento.Error.assert(this._memento._stores[to[0]].indices[to[1]] == null, 'index already exists')
+            const store = this._memento._stores[to[0]].indices[to[1]] =
+                this._memento._stores[from[0]].indices[from[1]]
+            delete this._memento._stores[from[0]].indices[from[1]]
+            await this._journalist.rename(path.join('indices', from[0], from[1]), path.join('indices', to[0], to[1]))
         } else {
             Memento.Error.assert(this._memento._stores[from] != null, 'store does not exist')
             Memento.Error.assert(this._memento._stores[to] == null, 'store already exists')
@@ -485,6 +490,9 @@ class Schema extends Mutator {
                 await this._journalist.rename(path.join('indices', from, name), path.join('indices', to, name))
             }
         }
+    }
+
+    async remove (name) {
     }
 }
 
