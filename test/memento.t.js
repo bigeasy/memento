@@ -83,7 +83,7 @@ require('proof')(16, async okay => {
     function createMemento (rollback = false) {
         return Memento.open({
             version: 1,
-            destructible: destructible.durable('memento'),
+            destructible: destructible.terminal('memento'),
             directory: directory,
             comparators: {
                 text: (left, right) => (left > right) - (left < right)
@@ -114,7 +114,7 @@ require('proof')(16, async okay => {
     okay(errors, [ true ], 'rollback open')
     const memento = await createMemento()
 
-    destructible.durable('test', Destructible.rescue(async function () {
+    destructible.terminal('test', Destructible.rescue(async function () {
         const insert = presidents.slice(0)
 
         {

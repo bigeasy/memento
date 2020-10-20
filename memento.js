@@ -671,7 +671,7 @@ class Memento {
             return object
         })
 
-        const destructible = this._destructible.amalgamators.durable([ 'store', name ])
+        const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
 
         const amalgamator = new Amalgamator(destructible, {
@@ -750,7 +750,7 @@ class Memento {
             return object
         })
 
-        const destructible = this._destructible.amalgamators.durable([ 'store', name ])
+        const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
 
         const amalgamator = new Amalgamator(destructible, {

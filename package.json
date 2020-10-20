@@ -34,7 +34,8 @@
     },
     "devDependencies":
     {
-                            "proof":                        "^9.0.2"
+                            "proof":                        "^9.0.2",
+                            "destructible":                 "7.0.0-alpha.14"
     },
     "main":                 "memento",
     "scripts":
