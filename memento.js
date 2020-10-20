@@ -501,8 +501,15 @@ class Schema extends Mutator {
 
 class Memento {
     static ASC = Symbol('ascending')
+
     static DSC = Symbol('decending')
-    static Error = Interrupt.create('Memento.Error')
+
+    static Error = Interrupt.create('Memento.Error', {
+        ALREADY_EXISTS: '%s already exists',
+        DOES_NOT_EXIST: '%s does not exist',
+        INVALID_RENAME: 'the stores for an index rename must be the same',
+        ROLLBACK: 'transaction rolled back'
+    })
 
     constructor (options) {
         this.destructible = options.destructible
