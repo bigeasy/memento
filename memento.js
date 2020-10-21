@@ -454,7 +454,7 @@ class Schema extends Mutator {
 
     // TODO Need a rollback interface.
     async store (name, extraction) {
-        Memento.Error.assert(this._memento._stores[name] == null, 'store already exists')
+        Memento.Error.assert(this._memento._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
         const directory = (await this._journalist.mkdir(path.join('stores', name))).absolute
         const comparisons = this._comparisons(extraction)
         await fs.mkdir(path.join(directory, 'store'))
@@ -463,8 +463,8 @@ class Schema extends Mutator {
     }
 
     async index (name, extraction, options = {}) {
-        Memento.Error.assert(this._memento._stores[name[0]] != null, 'store does not exist')
-        Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, 'index already exists')
+        Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
+        Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
         const directory = (await this._journalist.mkdir(path.join('indices', name[0], name[1]))).absolute
         const comparisons = this._comparisons(extraction)
         await fs.mkdir(path.join(directory, 'store'))
@@ -475,17 +475,17 @@ class Schema extends Mutator {
     // TODO Would need to close completely, then rename and reopen.
     async rename (from, to) {
         if (Array.isArray(from)) {
-            Memento.Error.assert(from[0] == to[0], 'the stores for an index move must be the same')
-            Memento.Error.assert(this._memento._stores[from[0]] != null, 'store does not exist')
-            Memento.Error.assert(this._memento._stores[from[0]].indices[from[1]] != null, 'index does not exist')
-            Memento.Error.assert(this._memento._stores[to[0]].indices[to[1]] == null, 'index already exists')
+            Memento.Error.assert(from[0] == to[0], 'INVALID_RENAME')
+            Memento.Error.assert(this._memento._stores[from[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
+            Memento.Error.assert(this._memento._stores[from[0]].indices[from[1]] != null, [ 'DOES_NOT_EXIST', 'index' ])
+            Memento.Error.assert(this._memento._stores[to[0]].indices[to[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
             const store = this._memento._stores[to[0]].indices[to[1]] =
                 this._memento._stores[from[0]].indices[from[1]]
             delete this._memento._stores[from[0]].indices[from[1]]
             await this._journalist.rename(path.join('indices', from[0], from[1]), path.join('indices', to[0], to[1]))
         } else {
-            Memento.Error.assert(this._memento._stores[from] != null, 'store does not exist')
-            Memento.Error.assert(this._memento._stores[to] == null, 'store already exists')
+            Memento.Error.assert(this._memento._stores[from] != null, [ 'DOES_NOT_EXIST', 'store' ])
+            Memento.Error.assert(this._memento._stores[to] == null, [ 'ALREADY_EXISTS', 'store' ])
             const store = this._memento._stores[to] = this._memento._stores[from]
             delete this._memento._stores[from]
             await this._journalist.rename(path.join('stores', from), path.join('stores', to))
