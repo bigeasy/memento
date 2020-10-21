@@ -95,55 +95,87 @@ class InnerIterator {
     next () {
         // TODO Here is the inner series check, so all we need is one for the
         // outer iterator and we're good.
-        if (this._outer._mutation.series != this._series) {
-            this._series = this._outer._mutation.series
-            return { done: true, value: null }
-        }
-        const candidates = []
-        if (this._items != null) {
-            if (this._items.array.length == this._items.index) {
+        for (;;) {
+            if (this._outer._mutation.series != this._series) {
+                this._series = this._outer._mutation.series
                 return { done: true, value: null }
-            } else {
-                candidates.push(this._items)
+            }
+            const candidates = []
+            if (this._items != null) {
+                if (this._items.array.length == this._items.index) {
+                    return { done: true, value: null }
+                } else {
+                    candidates.push(this._items)
+                }
+            }
+            const array = this._outer._mutation.appends[0]
+            const comparator = this._outer._mutation.amalgamator._comparator.stage
+            let { index, found } = this._outer._previous.key == null
+                ? { index: this._direction == 1 ? 0 : array.length, found: false }
+                : find(comparator, array, this._outer._previous.key, 0, array.length - 1)
+            if (found || this._direction == -1) {
+                index += this._direction
+            }
+            if (0 <= index && index < array.length) {
+                candidates.push({ array, index })
+            }
+            if (candidates.length == 0) {
+                this._outer._done = true
+                return { done: true, value: null }
+            }
+            candidates.sort((left, right) => {
+                return comparator(left.array[left.index].key, right.array[right.index].key) * this._direction
+            })
+            const candidate = candidates.shift()
+            // We always increment the index because Strata iterators return the
+            // values reversed but we search our in-memory stage each time we
+            // descend.
+            this._outer._previous = candidate.array[candidate.index++]
+            const result = this._outer._filter(this._outer._previous)
+            if (result != null) {
+                return result
             }
         }
-        const array = this._outer._mutation.appends[0]
-        const comparator = this._outer._mutation.amalgamator._comparator.stage
-        let { index, found } = this._outer._previous.key == null
-            ? { index: this._direction == 1 ? 0 : array.length, found: false }
-            : find(comparator, array, this._outer._previous.key, 0, array.length - 1)
-        if (found || this._direction == -1) {
-            index += this._direction
-        }
-        if (0 <= index && index < array.length) {
-            candidates.push({ array, index })
-        }
-        if (candidates.length == 0) {
-            this._outer._done = true
-            return { done: true, value: null }
-        }
-        candidates.sort((left, right) => {
-            return comparator(left.array[left.index].key, right.array[right.index].key) * this._direction
-        })
-        const candidate = candidates.shift()
-        // We always increment the index because Strata iterators return the
-        // values reversed but we search our in-memory stage each time we
-        // descend.
-        this._outer._previous = candidate.array[candidate.index++]
-        return { done: false, value: this._outer._previous.value }
     }
 }
 
+// New problem, for joins. We need to do the lookup of the join during the async
+// part, but if we are a mutator we have in-memory records. We look those up in
+// the sync part. If we get one, we now need to do the join synchronously.
+
+// Well, here's a think for you. We can do the join asynchronously first, for
+// the records we have, then we can continue to join in OuterIterator doing a
+// tree descent with a trampoline, but if we miss, if `trampoline.seek()` is
+// true, we just exit early. If we're looking up state names, for example, the
+// cache is probably hot. If we've updated a record without changing the lookup
+// keys, the cache is probably hot. The problem is that Strata will raise an
+// exception and that will end up being an unhandled rejection. Oh, no problem,
+// we just register a swallow it catch handler.
+
+// Which makes me think that it would be nice to do a pre-merge. To scan ahead
+// into the append on deck to heat the cache, or maybe to create a lookup map,
+// stopping where we'd stop in the inner iterator.
+
+// We actually can do this this synchronous peek if we update Trampoline to
+// invoke a function on `shift`. Looks as though the one, primary use in Strata
+// is an `async` function I call immediately anyway.
+
+// I'm assuming that I can detect a miss by virtue of a null value, but that
+// wouldn't work for outer joins. I'd have to map in-memory insert order to any
+// looked up joins.
+
+//
 class OuterIterator {
     constructor ({
-        transaction, mutation, direction,
+        snapshot, transaction, mutation, direction,
         key = null, inclusive = true,
         converter = (trampoline, items, consume) => {
             consume(items.map(item => {
-                return { key: item.key, parts: item.parts, value: item.parts[1] }
+                return { key: item.key, parts: item.parts, value: item.parts[1], join: null }
             }))
         }
     }) {
+        this._snapshot = snapshot
         this._transaction = transaction
         this._direction = direction
         this._previous = { key }
@@ -152,9 +184,19 @@ class OuterIterator {
         this._series = 0
         this._inclusive = inclusive
         this._done = false
+        this._joins = []
     }
 
     [Symbol.asyncIterator] () {
+        return this
+    }
+
+    // TODO Probably going to be a nerd about it and create an
+    // `OuterIteratorBuilder` that is separate from the `OuterIterator`, maybe.
+
+    //
+    join (name, using, filter = () => true) {
+        this._joins.push({ name, using, filter })
         return this
     }
 
@@ -174,6 +216,16 @@ class OuterIterator {
         this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
     }
 
+    _filter (candidate) {
+        if (this._joins.length != 0) {
+            if (candidate.join == null) {
+                return null
+            }
+            return { done: false, value: candidate.join }
+        }
+        return { done: false, value: candidate.value }
+    }
+
     async next () {
         if (this._done) {
             return { done: true, value: null }
@@ -182,13 +234,41 @@ class OuterIterator {
             this._series = this._mutation.series
             this._search()
         }
-        const trampoline = new Trampoline, scope = { items: null, converted: null }
+        const trampoline = new Trampoline, scope = { items: null, converted: null, joined: [] }
         this._iterator.next(trampoline, items => scope.items = items)
         while (trampoline.seek()) {
             await trampoline.shift()
         }
         if (scope.items != null) {
             this._converter(trampoline, scope.items, converted => scope.converted = converted)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        if (scope.converted != null && this._joins.length != 0) {
+            const join = (i, j) => {
+                if (i < scope.converted.length) {
+                    if (j == 0) {
+                        scope.converted[i].join = [ scope.converted[i].value ]
+                    }
+                    if (j == this._joins.length) {
+                        scope.joined.push(scope.converted[i])
+                        trampoline.push(() => join(i + 1, 0))
+                    } else {
+                        const { name, using } = this._joins[j]
+                        const key = using(scope.converted[i].join)
+                        this._snapshot._get(name, trampoline, key, item => {
+                            if (item == null) {
+                                trampoline.push(() => join(i + 1, 0))
+                            } else {
+                                scope.converted[i].join.push(item.parts[1])
+                                trampoline.push(() => join(i, j + 1))
+                            }
+                        })
+                    }
+                }
+            }
+            join(0, 0)
             while (trampoline.seek()) {
                 await trampoline.shift()
             }
@@ -271,7 +351,7 @@ class Mutator extends Snapshot {
         }, record ]
         const comparator = mutation.amalgamator._comparator.stage
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
-        array.splice(index, 0, { key: compound, parts, value })
+        array.splice(index, 0, { key: compound, parts, value, join: null })
         this._maybeMerge(mutation, 1024)
     }
 
@@ -302,6 +382,7 @@ class Mutator extends Snapshot {
             const mutation = this._mutation(name[0])
             const index = mutation.indices[name[1]]
             return new OuterIterator({
+                snapshot: this,
                 transaction: this._transaction,
                 mutation: index,
                 direction: direction,
@@ -331,6 +412,7 @@ class Mutator extends Snapshot {
             })
         }
         return new OuterIterator({
+            snapshot: this,
             transaction: this._transaction,
             mutation: this._mutation(name),
             direction: direction
@@ -762,7 +844,8 @@ class Memento {
                     return [ Buffer.from(JSON.stringify(parts)) ]
                 },
                 deserialize: function (parts) {
-                    return JSON.parse(parts[0].toString())
+                    const foo = JSON.parse(parts[0].toString())
+                    return foo
                 }
             },
             transformer: function (operation) {
