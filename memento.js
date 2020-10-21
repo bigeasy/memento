@@ -1,6 +1,7 @@
 const path = require('path')
 const fs = require('fs').promises
 
+const Destructible = require('destructible')
 const Trampoline = require('skip')
 const Interrupt = require('interrupt')
 
