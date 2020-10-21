@@ -1,4 +1,6 @@
 require('proof')(16, async okay => {
+    const Interrupt = require('interrupt')
+
     const presidents = function () {
         const presidencies = `George, Washington, VA
         John, Adams, MA
@@ -65,6 +67,63 @@ require('proof')(16, async okay => {
         })
     } ()
 
+    const states = function () {
+        const states = `AL Alabama
+        AK Alaska
+        AZ Arizona
+        AR Arkansas
+        CA California
+        CO Colorado
+        CT Connecticut
+        DE Delaware
+        FL Florida
+        GA Georgia
+        HI Hawaii
+        ID Idaho
+        IL Illinois
+        IN Indiana
+        IA Iowa
+        KS Kansas
+        KY Kentucky
+        LA Louisiana
+        ME Maine
+        MD Maryland
+        MA Massachusetts
+        MI Michigan
+        MN Minnesota
+        MS Mississippi
+        MO Missouri
+        MT Montana
+        NE Nebraska
+        NV Nevada
+        NH New Hampshire
+        NJ New Jersey
+        NM New Mexico
+        NY New York
+        NC North Carolina
+        ND North Dakota
+        OH Ohio
+        OK Oklahoma
+        OR Oregon
+        PA Pennsylvania
+        RI Rhode Island
+        SC South Carolina
+        SD South Dakota
+        TN Tennessee
+        TX Texas
+        UT Utah
+        VT Vermont
+        VA Virginia
+        WA Washington
+        WV West Virginia
+        WI Wisconsin
+        WY Wyoming`
+        return states.split(/\n/).map(line => {
+            const [ , code, name ] = /^.*([A-Z]{2})\s(.*)/.exec(line)
+            return { code, name }
+        })
+    } ()
+
     const fs = require('fs').promises
     const path = require('path')
 
@@ -79,11 +138,11 @@ require('proof')(16, async okay => {
     await fs.rmdir(directory, { recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
-    const destructible = new Destructible(5000, 'memento.t')
-    function createMemento (rollback = false) {
+    const destructible = new Destructible(1000, 'memento.t')
+    function createMemento (version = 1, rollback = false) {
         return Memento.open({
-            version: 1,
-            destructible: destructible.terminal('memento'),
+            version: version,
+            destructible: destructible.ephemeral('memento'),
             directory: directory,
             comparators: {
                 text: (left, right) => (left > right) - (left < right)
@@ -97,6 +156,10 @@ require('proof')(16, async okay => {
                 await schema.rename(['president', 'place' ], [ 'president', 'state' ])
                 break
             case 2:
+                await schema.store('state', { code: String })
+                for (const state of states) {
+                    schema.set('state', state)
+                }
                 break
             }
             if (rollback) {
@@ -107,14 +170,15 @@ require('proof')(16, async okay => {
 
     const errors = []
     try {
-        await createMemento(true)
+        await createMemento(1, true)
     } catch (error) {
         errors.push(/^rollback$/m.test(error.message))
     }
     okay(errors, [ true ], 'rollback open')
-    const memento = await createMemento()
 
     destructible.terminal('test', Destructible.rescue(async function () {
+        let memento = await createMemento()
+
         const insert = presidents.slice(0)
 
         {
@@ -259,6 +323,10 @@ require('proof')(16, async okay => {
         } catch (error) {
             console.log(error.stack)
         }
+
+        memento = await createMemento(2)
+
+        await memento.close()
     }))
 
     await destructible.rejected

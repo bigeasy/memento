@@ -256,7 +256,7 @@ class Mutator extends Snapshot {
         if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
             // TODO Really seems like a queue is appropriate.
-            return this._destructible.ephemeral([ 'merge'].concat(mutation.qualifier), this._merge(mutation))
+            this._destructible.ephemeral([ 'merge'].concat(mutation.qualifier), this._merge(mutation))
         }
         return null
     }
@@ -660,12 +660,12 @@ class Memento {
             try {
                 await upgrade(schema)
                 await schema.commit()
+                await memento._destructible.open.destroy().rejected
                 await journalist.mkdir(path.join('versions', String(version)))
                 await journalist.write()
                 await Journalist.prepare(journalist)
                 await Journalist.commit(journalist)
                 await journalist.dispose()
-                await memento._destructible.open.destroy().rejected
                 return await Memento.open({
                     destructible,
                     directory,
