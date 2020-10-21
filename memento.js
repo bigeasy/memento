@@ -531,6 +531,9 @@ class Memento {
         this._versions = { '0': true }
         this.directory = options.directory
         this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
+        this._locker.on('amalgamated', (exclusive, inclusive) => {
+            this._destructible.commits.ephemeral('amalgamated', this._amalgamated(exclusive, inclusive))
+        })
         const primary = coalesce(options.primary, {})
         const stage = coalesce(options.stage, {})
         const leaf = { stage: coalesce(stage.leaf, {}), primary: coalesce(primary.leaf, {}) }
@@ -575,8 +578,10 @@ class Memento {
         memento._destructible = {
             open: open,
             amalgamators: open.durable('amalgamators'),
-            mutators: open.durable('mutators')
+            mutators: open.durable('mutators'),
+            commits: open.durable('collector')
         }
+        memento._destructible.commits.increment()
         open.destruct(() => {
             // Destroying the amalgamators and mutators Destructible will
             // prevent new stores, indices or mutations from being created.
@@ -594,6 +599,8 @@ class Memento {
                         memento._stores[store].indices[index].destructible.decrement()
                     }
                 }
+                await memento._destructible.commits.drain()
+                memento._destructible.commits.destroy()
             })
         })
         const list = async () => {
@@ -605,7 +612,7 @@ class Memento {
                 return await list()
             }
         }
-        memento._commits = new Strata(memento._destructible.amalgamators.durable('commits'), {
+        memento._commits = new Strata(memento._destructible.commits.durable('strata'), {
             directory: path.resolve(memento.directory, 'commits'),
             cache: memento._cache,
             comparator: (left, right) => left - right,
@@ -674,6 +681,28 @@ class Memento {
             }
         }
         return memento
+    }
+
+    async _amalgamated (exclusive, inclusive) {
+        const scope = { right: exclusive + 1 }, writes = {}
+        const trampoline = new Trampoline
+        while (scope.right != null) {
+            this._commits.search(trampoline, scope.right, cursor => {
+                const i = cursor.index
+                while (i < cursor.page.items.length) {
+                    if (cursor.page.items[i].key > inclusive ) {
+                        scope.right = null
+                        return
+                    }
+                    cursor.remove(i, writes)
+                }
+                scope.right = cursor.page.right
+            })
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        await Strata.flush(writes)
     }
 
     get _version () {
