@@ -25,7 +25,7 @@
                             "ascension":                    "^2.0.0",
                             "avenue":                       "^0.4.0",
                             "b-tree":                       "^2.0.0-alpha.54",
-                            "destructible":                 "^7.0.0-alpha.11",
+                            "destructible":                 "7.0.0-alpha.14",
                             "interrupt":                    "11.0.0-alpha.1",
                             "journalist":                   "0.1.7",
                             "keyify":                       "^2.0.4",
@@ -35,8 +35,7 @@
     },
     "devDependencies":
     {
-                            "proof":                        "^9.0.2",
-                            "destructible":                 "7.0.0-alpha.14"
+                            "proof":                        "^9.0.2"
     },
     "main":                 "memento",
     "scripts":
