@@ -23,6 +23,7 @@ const ascension = require('ascension')
 
 const ROLLBACK = Symbol('rollback')
 
+const riffle = require('riffle')
 
 function find (comparator, array, key, low, high) {
     let mid
@@ -386,6 +387,16 @@ class Mutator extends Snapshot {
             }
             return false
         }
+        const trampoline = new Trampoline
+        const writes = {}
+        const version = this._transaction.mutation.version
+        this._memento._commits.search(trampoline, version, cursor => {
+            cursor.insert(cursor.index, version, [ version ], writes)
+        })
+        while (trampoline.seek()) {
+            await trampoline.shift()
+        }
+        await Strata.flush(writes)
         // TODO Here goes your commit write *before* you call in-memory commit.
         this._memento._locker.commit(this._transaction)
         this._destructible.decrement()
@@ -459,7 +470,7 @@ class Schema extends Mutator {
         const comparisons = this._comparisons(extraction)
         await fs.mkdir(path.join(directory, 'store'))
         await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
-        await this._memento._store(name, directory, true)
+        await this._memento._store(new Set, name, directory, true)
     }
 
     async index (name, extraction, options = {}) {
@@ -469,7 +480,7 @@ class Schema extends Mutator {
         const comparisons = this._comparisons(extraction)
         await fs.mkdir(path.join(directory, 'store'))
         await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify({ comparisons, options }))
-        await this._memento._index(name, directory, true)
+        await this._memento._index(new Set, name, directory, true)
     }
 
     // TODO Would need to close completely, then rename and reopen.
@@ -593,20 +604,41 @@ class Memento {
                 return await list()
             }
         }
-        const subdirs = [ 'versions', 'stores', 'indices' ].sort()
+        memento._commits = new Strata(memento._destructible.amalgamators.durable('commits'), {
+            directory: path.resolve(memento.directory, 'commits'),
+            cache: memento._cache,
+            comparator: (left, right) => left - right,
+            serializer: 'json'
+        })
+        const subdirs = [ 'versions', 'stores', 'indices', 'commits' ].sort()
         const dirs = await list()
         if (dirs.length == 0) {
             for (const dir of subdirs) {
                 await fs.mkdir(path.resolve(memento.directory, dir))
             }
             await fs.mkdir(path.resolve(memento.directory, './versions/0'))
+            await memento._commits.create()
         } else {
+            await memento._commits.open()
+            const versions = new Set
+            const iterator = riffle.forward(memento._commits, Strata.MIN)
+            const trampoline = new Trampoline
+            while (! iterator.done) {
+                iterator.next(trampoline, items => {
+                    for (const item of items) {
+                        versions.add(item.parts[0])
+                    }
+                })
+                while (trampoline.seek()) {
+                    await trampoline.shift()
+                }
+            }
             for (const store of (await fs.readdir(path.join(directory, 'stores')))) {
-                await memento._store(store, path.join(directory, 'stores', store))
+                await memento._store(versions, store, path.join(directory, 'stores', store))
             }
             for (const store of (await fs.readdir(path.join(directory, 'indices')))) {
                 for (const index of (await fs.readdir(path.join(directory, 'indices', store)))) {
-                    await memento._index([ store, index ], path.join(directory, 'indices', store, index))
+                    await memento._index(versions, [ store, index ], path.join(directory, 'indices', store, index))
                 }
             }
         }
@@ -650,7 +682,7 @@ class Memento {
     async _open (upgrade, version) {
     }
 
-    async _store (name, directory, create = false) {
+    async _store (versions, name, directory, create = false) {
         const comparisons = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
 
         const extractors = comparisons.map(part => {
@@ -722,10 +754,12 @@ class Memento {
 
         await amalgamator.ready
 
+        await amalgamator.recover(versions)
+
         this._stores[name] = { destructible, amalgamator, indices: {}, comparisons }
     }
 
-    async _index ([ storeName, name ], directory, create = false) {
+    async _index (versions, [ storeName, name ], directory, create = false) {
         const key = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
 
         const store = this._stores[storeName]
@@ -799,6 +833,8 @@ class Memento {
         })
 
         await amalgamator.ready
+
+        await amalgamator.recover(versions)
 
         store.indices[name] = {
             destructible, amalgamator, extractor, keyLength: key.comparisons.length

@@ -1,3 +1,18 @@
+## Tue Oct 20 21:35:33 CDT 2020
+
+Need to find a way to delete from the commit record. I see now that I'd
+implemented rotation in Amalgamate such that rotation causes all collections to
+merge with optimizations for collections that do not require a merge. The
+versions are grouped in the locker so after rotation the Locker can emit a
+message with a set of all the versions that have been flushed by rotation.
+
+We can delete these.
+
+There is also the problem of a recovery where we don't have a perfect set. At
+recovery we rotate to force anything that that was not cleared out at at close
+to get flushed. Perhaps we simply return the versions that where given to us,
+since they would have come from out commit storage.
+
 ## Sun Oct 11 00:30:36 CDT 2020
 
 Documentation resources and inspiration. Writing documentation is hard. What is
