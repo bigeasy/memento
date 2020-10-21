@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>Memento</title>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, target-densitydpi=160dpi, initial-scale=1.0; maximum-scale=1.0; user-scalable=0;">
+  <link rel="stylesheet" media="all" href="docco.css" />
+</head>
+<body>
+  <div id="container">
+    <div id="background"></div>
+
+      <ul id="jump_to">
+        <li>
+          <a class="large" href="javascript:void(0);">Jump To &hellip;</a>
+          <a class="small" href="javascript:void(0);">+</a>
+          <div id="jump_wrapper">
+          <div id="jump_page_wrapper">
+            <div id="jump_page">
+
+
+                <a class="source" href="memento.js.html">
+                  memento.js
+                </a>
+
+
+                <a class="source" href="sketch.js.html">
+                  sketch.js
+                </a>
+
+
+                <a class="source" href="readme.t.js.html">
+                  readme.t.js
+                </a>
+
+            </div>
+          </div>
+        </li>
+      </ul>
+
+    <ul class="sections">
+
+
+
+        <li id="section-1">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-1">&#182;</a>
+              </div>
+              <h1 id="memento">Memento</h1>
+<p>Memento is a pure JavaScript database. Is is an actual database. Writes data
+to file, pages it in and out of memory as needed. Memento is concurrent,
+indexed, transactional and persistent with a contemporary <code>async</code>/<code>await</code>
+interface.</p>
+<p>This unit test represents a tour of Memento and is a stub for some actual
+documentation that I may write someday. It is part of Memento’s unit test
+suite and lives in the Memento repository. You can run this readme yourself.</p>
+<pre><code class="language-text">git clone git@github.com:bigeasy/memento.git
+cd memento
+npm install --no-package-lock --no-save
+node test/readme.t.js</code></pre>
+<p>Note that you should run <code>node test/readme.t.js</code> and not <code>npm test</code> to see
+the output from this walk-through.</p>
+<p>This walk-through uses the <a href="https://github.com/bigeasy/proof">Proof</a> unit
+test framework. It will setup an <code>async</code> function that will catch and report
+any exceptions. We’ll use the <code>okay</code> function to assert the points we make
+about Memento.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-2">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-2">&#182;</a>
+              </div>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre><span class="hljs-built_in">require</span>(<span class="hljs-string">'proof'</span>)(<span class="hljs-number">2</span>, <span class="hljs-keyword">async</span> okay =&gt; {</pre></div></div>
+
+        </li>
+
+
+        <li id="section-3">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-3">&#182;</a>
+              </div>
+              <p>To use Memento in your project it you’ll want to install it from NPM.</p>
+<pre><code class="language-text">npm install memento</code></pre>
+<p>You can then include Memento in your program with <code>require</code>.</p>
+<pre><code class="language-javascript"><span class="hljs-keyword">const</span> Memento = <span class="hljs-built_in">require</span>(<span class="hljs-string">'memento'</span>)</code></pre>
+<p>But, because we’re running in the Memento project we have to use a
+relative path to the root index. Use the above, not the below.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-4">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-4">&#182;</a>
+              </div>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">const</span> Memento = <span class="hljs-built_in">require</span>(<span class="hljs-string">'..'</span>)
+
+    okay(Memento != <span class="hljs-literal">null</span>, <span class="hljs-string">'require'</span>)</pre></div></div>
+
+        </li>
+
+
+        <li id="section-5">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-5">&#182;</a>
+              </div>
+              <p>We’re going to do some file manipulation in this walk-though.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">const</span> path = <span class="hljs-built_in">require</span>(<span class="hljs-string">'path'</span>)
+    <span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">'fs'</span>).promises</pre></div></div>
+
+        </li>
+
+
+        <li id="section-6">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-6">&#182;</a>
+              </div>
+              <p>We’re going to reset our example directory.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">const</span> directory = path.resolve(__dirname, <span class="hljs-string">'./tmp/readme'</span>)
+    <span class="hljs-keyword">await</span> fs.rmdir(directory, { <span class="hljs-attr">recursive</span>: <span class="hljs-literal">true</span> })
+    <span class="hljs-keyword">await</span> fs.mkdir(directory, { <span class="hljs-attr">recursive</span>: <span class="hljs-literal">true</span> })</pre></div></div>
+
+        </li>
+
+
+        <li id="section-7">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-7">&#182;</a>
+              </div>
+              <p>Memento has a lot of options. <strong>TODO</strong> come back and write a function
+call of this.</p>
+<p>We create a database object with the static <code>async Memento.open</code>
+function. It returns an open database ready for use.</p>
+<p>The first argument to <code>async Memento.open()</code> is an options object.</p>
+<p>The second argument is an <code>async</code> database upgrade function. You are only
+able to create new stores and indices in the update function. Once the
+database is open you’re not allowed to make any schema changes.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-8">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-8">&#182;</a>
+              </div>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">let</span> memento = <span class="hljs-keyword">await</span> Memento.open({ directory }, <span class="hljs-keyword">async</span> schema =&gt; {
+        <span class="hljs-keyword">switch</span> (schema.version) {
+        <span class="hljs-keyword">case</span> <span class="hljs-number">1</span>:
+            <span class="hljs-keyword">await</span> schema.store(<span class="hljs-string">'president'</span>, { <span class="hljs-attr">lastName</span>: <span class="hljs-built_in">String</span>, <span class="hljs-attr">firstName</span>: <span class="hljs-built_in">String</span> })
+            <span class="hljs-keyword">break</span>
+        }
+    })</pre></div></div>
+
+        </li>
+
+
+        <li id="section-9">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-9">&#182;</a>
+              </div>
+              <p>In order to add or remove data from the database you invoke
+<code>Memento.mutator()</code> with an <code>async</code> mutation function.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-10">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-10">&#182;</a>
+              </div>
+              <p>The mutator function represents an atomic transaction against the
+database. Changes made within the function are only visible within the
+function. They only become visible outside of the function when the
+function returns successfully.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-11">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-11">&#182;</a>
+              </div>
+              <p>If the function raises and exception, the changes are rolled back.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-12">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-12">&#182;</a>
+              </div>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">await</span> memento.mutator(<span class="hljs-keyword">async</span> mutator =&gt; {
+        mutator.set(<span class="hljs-string">'president'</span>, { <span class="hljs-attr">firstName</span>: <span class="hljs-string">'George'</span>, <span class="hljs-attr">lastName</span>: <span class="hljs-string">'Washington'</span> })
+        <span class="hljs-keyword">const</span> got = <span class="hljs-keyword">await</span> mutator.get(<span class="hljs-string">'president'</span>, [ <span class="hljs-string">'Washington'</span>, <span class="hljs-string">'George'</span> ])
+        okay(got, {
+            <span class="hljs-attr">firstName</span>: <span class="hljs-string">'George'</span>, <span class="hljs-attr">lastName</span>: <span class="hljs-string">'Washington'</span>
+        }, <span class="hljs-string">'isolated view of inserted record'</span>)
+    })</pre></div></div>
+
+        </li>
+
+
+        <li id="section-13">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-13">&#182;</a>
+              </div>
+              <p>You’ll notice that the <code>mutator.set()</code> method is a synchronous function.
+This is because we want inserts and deletes to be fast. Rather than
+performing asynchronous file operations for each insert and delete, we
+cache the changes in memory and write them out in batches.</p>
+<p>The <code>mutator.get()</code> method on the other hand is an <code>async</code> function. We
+have to go and check the database to see if the value is there and
+compare it with our write cache. Checking the database may require a read
+operation, or it may not, depending on the database cache.</p>
+<p>So, <code>mutator.set()</code> ought to be pretty quick, making batch inserts
+relatively painless. <code>async mutator.get()</code> not so quick because it has to
+go out through the <code>Promise</code>s event loop.</p>
+<p>We’ll make up for this discrepancy when we look at ranged queries,
+iterators, and joins.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-14">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-14">&#182;</a>
+              </div>
+              <p><strong>TODO</strong> A snapshot.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>
+    <span class="hljs-keyword">await</span> memento.close()
+})</pre></div></div>
+
+        </li>
+
+    </ul>
+  </div>
+</body>
+</html>

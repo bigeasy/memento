@@ -20,23 +20,18 @@
             <div id="jump_page">
 
 
-                <a class="source" href="inquisitor.js.html">
-                  inquisitor.js
-                </a>
-
-
-                <a class="source" href="memento.bin.js.html">
-                  memento.bin.js
-                </a>
-
-
                 <a class="source" href="memento.js.html">
                   memento.js
                 </a>
 
 
-                <a class="source" href="middleware.js.html">
-                  middleware.js
+                <a class="source" href="sketch.js.html">
+                  sketch.js
+                </a>
+
+
+                <a class="source" href="readme.t.js.html">
+                  readme.t.js
                 </a>
 
             </div>
@@ -63,134 +58,1015 @@
 
             </div>
 
-            <div class="content"><div class='highlight'><pre><span class="hljs-keyword">var</span> Conference = <span class="hljs-built_in">require</span>(<span class="hljs-string">'conference'</span>)
-<span class="hljs-keyword">var</span> cadence = <span class="hljs-built_in">require</span>(<span class="hljs-string">'cadence'</span>)
-<span class="hljs-keyword">var</span> logger = <span class="hljs-built_in">require</span>(<span class="hljs-string">'prolific.logger'</span>).createLogger(<span class="hljs-string">'memento'</span>)
-<span class="hljs-keyword">var</span> crypto = <span class="hljs-built_in">require</span>(<span class="hljs-string">'crypto'</span>)
-<span class="hljs-keyword">var</span> abend = <span class="hljs-built_in">require</span>(<span class="hljs-string">'abend'</span>)
-<span class="hljs-keyword">var</span> assert = <span class="hljs-built_in">require</span>(<span class="hljs-string">'assert'</span>)
-<span class="hljs-keyword">var</span> Cubbyhole = <span class="hljs-built_in">require</span>(<span class="hljs-string">'cubbyhole'</span>)
+            <div class="content"><div class='highlight'><pre><span class="hljs-keyword">const</span> path = <span class="hljs-built_in">require</span>(<span class="hljs-string">'path'</span>)
+<span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">'fs'</span>).promises
 
-<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">Memento</span> (<span class="hljs-params">cliffhanger, nodes</span>) </span>{
-    <span class="hljs-keyword">this</span>._nodes = nodes
-    <span class="hljs-keyword">this</span>._index = <span class="hljs-number">0</span>
-    <span class="hljs-keyword">this</span>._cliffhanger = cliffhanger
-    <span class="hljs-keyword">this</span>._stores = {}
-    <span class="hljs-keyword">this</span>._cubbyholes = <span class="hljs-keyword">new</span> Cubbyhole
+<span class="hljs-keyword">const</span> Destructible = <span class="hljs-built_in">require</span>(<span class="hljs-string">'destructible'</span>)
+<span class="hljs-keyword">const</span> Trampoline = <span class="hljs-built_in">require</span>(<span class="hljs-string">'skip'</span>)
+<span class="hljs-keyword">const</span> Interrupt = <span class="hljs-built_in">require</span>(<span class="hljs-string">'interrupt'</span>)
+
+<span class="hljs-keyword">const</span> Keyify = <span class="hljs-built_in">require</span>(<span class="hljs-string">'keyify'</span>)
+
+<span class="hljs-keyword">const</span> assert = <span class="hljs-built_in">require</span>(<span class="hljs-string">'assert'</span>)
+
+<span class="hljs-keyword">const</span> Strata = <span class="hljs-built_in">require</span>(<span class="hljs-string">'b-tree'</span>)
+<span class="hljs-keyword">const</span> Cache = <span class="hljs-built_in">require</span>(<span class="hljs-string">'b-tree/cache'</span>)
+
+<span class="hljs-keyword">const</span> Locker = <span class="hljs-built_in">require</span>(<span class="hljs-string">'amalgamate/locker'</span>)
+<span class="hljs-keyword">const</span> Amalgamator = <span class="hljs-built_in">require</span>(<span class="hljs-string">'amalgamate'</span>)
+<span class="hljs-keyword">const</span> Journalist = <span class="hljs-built_in">require</span>(<span class="hljs-string">'journalist'</span>)
+
+<span class="hljs-keyword">const</span> rescue = <span class="hljs-built_in">require</span>(<span class="hljs-string">'rescue'</span>)
+
+<span class="hljs-keyword">const</span> coalesce = <span class="hljs-built_in">require</span>(<span class="hljs-string">'extant'</span>)
+
+<span class="hljs-keyword">const</span> ascension = <span class="hljs-built_in">require</span>(<span class="hljs-string">'ascension'</span>)
+
+<span class="hljs-keyword">const</span> ROLLBACK = <span class="hljs-built_in">Symbol</span>(<span class="hljs-string">'rollback'</span>)
+
+<span class="hljs-keyword">const</span> riffle = <span class="hljs-built_in">require</span>(<span class="hljs-string">'riffle'</span>)
+
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">find</span> (<span class="hljs-params">comparator, array, key, low, high</span>) </span>{
+    <span class="hljs-keyword">let</span> mid
+
+    <span class="hljs-keyword">while</span> (low &lt;= high) {
+        mid = low + ((high - low) &gt;&gt;&gt; <span class="hljs-number">1</span>)
+        <span class="hljs-keyword">const</span> compare = comparator(key, array[mid].key)
+        <span class="hljs-keyword">if</span> (compare &lt; <span class="hljs-number">0</span>) high = mid - <span class="hljs-number">1</span>
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (compare &gt; <span class="hljs-number">0</span>) low = mid + <span class="hljs-number">1</span>
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> { <span class="hljs-attr">index</span>: mid, <span class="hljs-attr">found</span>: <span class="hljs-literal">true</span> }
+    }
+
+    <span class="hljs-keyword">return</span> { <span class="hljs-attr">index</span>: low, <span class="hljs-attr">found</span>: <span class="hljs-literal">false</span> }
 }
 
-Memento.prototype.test = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference, body</span>) </span>{
-    <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'GOT TEST'</span>, body)
-})
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">InnerIterator</span> </span>{
+    <span class="hljs-keyword">constructor</span> (outer, items) {
+        <span class="hljs-keyword">this</span>._outer = outer
+        <span class="hljs-keyword">this</span>._series = outer._mutation.series
+        <span class="hljs-keyword">this</span>._compare = outer._mutation.amalgamator._comparator.stage
+        <span class="hljs-keyword">this</span>._items = items == <span class="hljs-literal">null</span> ? <span class="hljs-literal">null</span> : { <span class="hljs-attr">array</span>: items, <span class="hljs-attr">index</span>: <span class="hljs-number">0</span> }
+        <span class="hljs-keyword">this</span>._direction = <span class="hljs-keyword">this</span>._outer._direction == <span class="hljs-string">'reverse'</span> ? <span class="hljs-number">-1</span> : <span class="hljs-number">1</span>
+    }
 
-Memento.prototype.join = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference</span>) </span>{
-    <span class="hljs-keyword">async</span>(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-        <span class="hljs-keyword">var</span> socket = <span class="hljs-literal">null</span>, shifter = <span class="hljs-literal">null</span>
-        <span class="hljs-keyword">if</span> (!conference.replaying) {
-            socket = conference.socket({ <span class="hljs-attr">promise</span>: conference.government.promise })
-            socket.write.push(<span class="hljs-literal">null</span>)
-            shifter = socket.read.shifter()
+    [<span class="hljs-built_in">Symbol</span>.iterator] () {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>
+    }
+
+    <span class="hljs-keyword">get</span> reversed () {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>._outer._direction == <span class="hljs-string">'reverse'</span>
+    }
+
+    <span class="hljs-keyword">set</span> reversed (value) {
+        <span class="hljs-keyword">const</span> direction = value ? <span class="hljs-string">'reverse'</span> : <span class="hljs-string">'forward'</span>
+        <span class="hljs-keyword">if</span> (direction != <span class="hljs-keyword">this</span>._outer._direction) {
+            <span class="hljs-keyword">this</span>._outer._direction = direction
+            <span class="hljs-keyword">this</span>._outer._series = <span class="hljs-keyword">this</span>._series = <span class="hljs-number">0</span>
+            <span class="hljs-keyword">this</span>._outer._done = <span class="hljs-literal">false</span>
         }
-        <span class="hljs-keyword">async</span>(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-            conference.record_(<span class="hljs-keyword">async</span>)(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-                shifter.dequeue(<span class="hljs-keyword">async</span>())
-            })
-        }, <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">envelope</span>) </span>{
-            <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'JOIN'</span>, envelope)
-            assert(envelope.module == <span class="hljs-string">'addendum'</span> &amp;&amp; envelope.method == <span class="hljs-string">'index'</span>)
-            <span class="hljs-keyword">this</span>._index = envelope.body
-        })
-        <span class="hljs-keyword">var</span> loop = <span class="hljs-keyword">async</span>(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-            conference.record_(<span class="hljs-keyword">async</span>)(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-                shifter.dequeue(<span class="hljs-keyword">async</span>())
-            })
-        }, <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">envelope</span>) </span>{
-            <span class="hljs-keyword">if</span> (envelope == <span class="hljs-literal">null</span>) {
-                <span class="hljs-keyword">return</span> [ loop.break ]
+    }</pre></div></div>
+
+        </li>
+
+
+        <li id="section-2">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-2">&#182;</a>
+              </div>
+              <p>The problem with advancing over our in-memory or file backed stage is
+that there may be writes to the stage that are greater than the last
+value returned, but less than any of the values that have been sliced
+into memory. Advacing indexes into the in-memory stage for inserts
+doesn’t help. If the last value returned from our primary tree is ‘a’,
+and the index of the in-memory stage is pointing at ‘z’, then if we’ve
+inserted ‘b’ since our last <code>next()</code> we are not going to see it, we will
+continue from ‘z’ if we’ve been adjusting our index for the inserts.</p>
+<p>What if we don’t advance the index? We’ll let’s say the amalgamaged tree
+is at ‘z’ and our in-memory store is at ‘b’ so we reutrn ‘b’. Now we
+insert ‘a’ and we point at a. Really, advancing the index is not about
+the index but about a comparison with the value at the insert spot. Seems
+like we may as well just do a binary search each time.</p>
+<p>This problem also exists for staging. I’ve worked through a number of
+goofy ideas to keep the active staging tree up-to-date, but the best
+thing to do, for now, is to just scrap the entire existing iterator and
+recreate it.</p>
+<p>Thought on these nested iterators, they should all always return
+something, a non-empty set, shouldn’t they? Why force that logic on the
+caller? Yet something like dilute might do this and I’ve been looking at
+making dilute synchronous.</p>
+
+            </div>
+
+        </li>
+
+
+        <li id="section-3">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-3">&#182;</a>
+              </div>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    next () {</pre></div></div>
+
+        </li>
+
+
+        <li id="section-4">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-4">&#182;</a>
+              </div>
+              <p>TODO Here is the inner series check, so all we need is one for the
+outer iterator and we’re good.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>        <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>._outer._mutation.series != <span class="hljs-keyword">this</span>._series) {
+            <span class="hljs-keyword">this</span>._series = <span class="hljs-keyword">this</span>._outer._mutation.series
+            <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">value</span>: <span class="hljs-literal">null</span> }
+        }
+        <span class="hljs-keyword">const</span> candidates = []
+        <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>._items != <span class="hljs-literal">null</span>) {
+            <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>._items.array.length == <span class="hljs-keyword">this</span>._items.index) {
+                <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">value</span>: <span class="hljs-literal">null</span> }
+            } <span class="hljs-keyword">else</span> {
+                candidates.push(<span class="hljs-keyword">this</span>._items)
             }
-            assert(envelope.module == <span class="hljs-string">'addendum'</span> &amp;&amp; envelope.method == <span class="hljs-string">'subscription'</span>)
-            <span class="hljs-keyword">this</span>._node[envelope.body.path] = envelope.body.node
-        })()
-    }, <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-        <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'----&gt; JOINED'</span>, { <span class="hljs-attr">index</span>: <span class="hljs-keyword">this</span>._index, <span class="hljs-attr">nodes</span>: <span class="hljs-keyword">this</span>._nodes })
-    })
-})
-
-Memento.prototype.immigrate = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference, id</span>) </span>{
-    <span class="hljs-keyword">this</span>._cubbyholes.set(conference.government.promise, <span class="hljs-literal">null</span>, {
-        <span class="hljs-attr">nodes</span>: <span class="hljs-built_in">JSON</span>.parse(<span class="hljs-built_in">JSON</span>.stringify(<span class="hljs-keyword">this</span>._nodes)),
-        <span class="hljs-attr">index</span>: <span class="hljs-keyword">this</span>._index
-    })
-})
-
-Memento.prototype.naturalize = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference, promise</span>) </span>{
-    <span class="hljs-keyword">delete</span> <span class="hljs-keyword">this</span>._cubbyholes.remove(promise)
-})
-
-Memento.prototype.exile = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference, id</span>) </span>{
-    <span class="hljs-keyword">this</span>._cubbys.remove(conference.government.exile.promise)
-})
-
-Memento.prototype._socket = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, socket, header</span>) </span>{
-    <span class="hljs-keyword">var</span> shifter = socket.read.shifter()
-    <span class="hljs-keyword">async</span>(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
-        <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'dequeuing'</span>)
-        shifter.dequeue(<span class="hljs-keyword">async</span>())
-    }, <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">envelope</span>) </span>{
-        <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'dequeued'</span>)
-        assert(envelope == <span class="hljs-literal">null</span>, <span class="hljs-string">'there should be no message body'</span>)
-       <span class="hljs-keyword">this</span>._cubbyholes.wait(header.promise, <span class="hljs-keyword">async</span>())
-    }, <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">store</span>) </span>{
-        socket.write.push({
-            <span class="hljs-attr">module</span>: <span class="hljs-string">'addendum'</span>,
-            <span class="hljs-attr">method</span>: <span class="hljs-string">'index'</span>,
-            <span class="hljs-attr">body</span>: store.index
-        })
-        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">var</span> path <span class="hljs-keyword">in</span> store.nodes) {
-            socket.write.push({
-                <span class="hljs-attr">module</span>: <span class="hljs-string">'addendum'</span>,
-                <span class="hljs-attr">method</span>: <span class="hljs-string">'index'</span>,
-                <span class="hljs-attr">body</span>: { <span class="hljs-attr">path</span>: path, <span class="hljs-attr">node</span>: store.nodes[path] }
-            })
         }
-        socket.write.push(<span class="hljs-literal">null</span>)
-    })
-})
+        <span class="hljs-keyword">const</span> array = <span class="hljs-keyword">this</span>._outer._mutation.appends[<span class="hljs-number">0</span>]
+        <span class="hljs-keyword">const</span> comparator = <span class="hljs-keyword">this</span>._outer._mutation.amalgamator._comparator.stage
+        <span class="hljs-keyword">let</span> { index, found } = <span class="hljs-keyword">this</span>._outer._previous.key == <span class="hljs-literal">null</span>
+            ? { <span class="hljs-attr">index</span>: <span class="hljs-keyword">this</span>._direction == <span class="hljs-number">1</span> ? <span class="hljs-number">0</span> : array.length, <span class="hljs-attr">found</span>: <span class="hljs-literal">false</span> }
+            : find(comparator, array, <span class="hljs-keyword">this</span>._outer._previous.key, <span class="hljs-number">0</span>, array.length - <span class="hljs-number">1</span>)
+        <span class="hljs-keyword">if</span> (found || <span class="hljs-keyword">this</span>._direction == <span class="hljs-number">-1</span>) {
+            index += <span class="hljs-keyword">this</span>._direction
+        }
+        <span class="hljs-keyword">if</span> (<span class="hljs-number">0</span> &lt;= index &amp;&amp; index &lt; array.length) {
+            candidates.push({ array, index })
+        }
+        <span class="hljs-keyword">if</span> (candidates.length == <span class="hljs-number">0</span>) {
+            <span class="hljs-keyword">this</span>._outer._done = <span class="hljs-literal">true</span>
+            <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">value</span>: <span class="hljs-literal">null</span> }
+        }
+        candidates.sort(<span class="hljs-function">(<span class="hljs-params">left, right</span>) =&gt;</span> {
+            <span class="hljs-keyword">return</span> comparator(left.array[left.index].key, right.array[right.index].key) * <span class="hljs-keyword">this</span>._direction
+        })
+        <span class="hljs-keyword">const</span> candidate = candidates.shift()</pre></div></div>
 
-Memento.prototype.socket = <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">conference, socket, header</span>) </span>{
-    <span class="hljs-keyword">this</span>._socket(socket, header, abend)
+        </li>
+
+
+        <li id="section-5">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-5">&#182;</a>
+              </div>
+              <p>We always increment the index because Strata iterators return the
+values reversed but we search our in-memory stage each time we
+descend.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>        <span class="hljs-keyword">this</span>._outer._previous = candidate.array[candidate.index++]
+        <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">false</span>, <span class="hljs-attr">value</span>: <span class="hljs-keyword">this</span>._outer._previous.value }
+    }
 }
 
-Memento.prototype.set = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, conference, envelope</span>) </span>{
-    <span class="hljs-built_in">console</span>.log(envelope)
-    <span class="hljs-keyword">var</span> node = <span class="hljs-keyword">this</span>._nodes[envelope.body.path] = {
-        <span class="hljs-attr">value</span>: envelope.body.value,
-        <span class="hljs-attr">key</span>: envelope.body.path,
-        <span class="hljs-attr">createdIndex</span>: <span class="hljs-keyword">this</span>._index,
-        <span class="hljs-attr">modifiedIndex</span>: <span class="hljs-keyword">this</span>._index
-    }
-    <span class="hljs-keyword">this</span>._index++
-    <span class="hljs-keyword">if</span> (envelope.from == conference.id) {
-        <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'RESOLVING!'</span>)
-        <span class="hljs-keyword">this</span>._cliffhanger.resolve(envelope.cookie, [ <span class="hljs-literal">null</span>, { <span class="hljs-attr">action</span>: <span class="hljs-string">'set'</span>, <span class="hljs-attr">node</span>: node }])
-    }
-})
-
-Memento.prototype.remove = cadence(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">async, set</span>) </span>{
-    <span class="hljs-keyword">var</span> node = <span class="hljs-keyword">this</span>.nodes[set.path]
-    <span class="hljs-keyword">if</span> (envelope.from == <span class="hljs-keyword">this</span>.paxos.id) {
-        <span class="hljs-keyword">var</span> result = {
-            <span class="hljs-attr">action</span>: <span class="hljs-string">'delete'</span>,
-            <span class="hljs-attr">node</span>: {
-                <span class="hljs-attr">createdIndex</span>: node.createdIndex,
-                <span class="hljs-attr">key</span>: node.key,
-                <span class="hljs-attr">modifiedIndex</span>: <span class="hljs-keyword">this</span>._index++
-            },
-            <span class="hljs-attr">prevNode</span>: node
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">OuterIterator</span> </span>{
+    <span class="hljs-keyword">constructor</span> ({
+        transaction, mutation, direction,
+        key = <span class="hljs-literal">null</span>, inclusive = <span class="hljs-literal">true</span>,
+        converter = <span class="hljs-function">(<span class="hljs-params">trampoline, items, consume</span>) =&gt;</span> {
+            consume(items.map(<span class="hljs-function"><span class="hljs-params">item</span> =&gt;</span> {
+                <span class="hljs-keyword">return</span> { <span class="hljs-attr">key</span>: item.key, <span class="hljs-attr">parts</span>: item.parts, <span class="hljs-attr">value</span>: item.parts[<span class="hljs-number">1</span>] }
+            }))
         }
-        <span class="hljs-keyword">this</span>._cliffhanger.resolve(envelope.cookie, [ <span class="hljs-literal">null</span>, result ])
+    }) {
+        <span class="hljs-keyword">this</span>._transaction = transaction
+        <span class="hljs-keyword">this</span>._direction = direction
+        <span class="hljs-keyword">this</span>._previous = { key }
+        <span class="hljs-keyword">this</span>._mutation = mutation
+        <span class="hljs-keyword">this</span>._converter = converter
+        <span class="hljs-keyword">this</span>._series = <span class="hljs-number">0</span>
+        <span class="hljs-keyword">this</span>._inclusive = inclusive
+        <span class="hljs-keyword">this</span>._done = <span class="hljs-literal">false</span>
     }
-})
+
+    [<span class="hljs-built_in">Symbol</span>.asyncIterator] () {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>
+    }
+
+    _search () {
+        <span class="hljs-keyword">const</span> {
+            <span class="hljs-attr">_mutation</span>: { amalgamator },
+            <span class="hljs-attr">_mutation</span>: { appends },
+            <span class="hljs-attr">_transaction</span>: transaction,
+            <span class="hljs-attr">_direction</span>: direction,
+            <span class="hljs-attr">_previous</span>: { key },
+            <span class="hljs-attr">_inclusive</span>: inclusive
+        } = <span class="hljs-keyword">this</span>
+        <span class="hljs-keyword">const</span> additional = []
+        <span class="hljs-keyword">if</span> (appends.length == <span class="hljs-number">2</span>) {
+            additional.push(advance.forward([ appends[<span class="hljs-number">1</span>] ]))
+        }
+        <span class="hljs-keyword">this</span>._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
+    }
+
+    <span class="hljs-keyword">async</span> next () {
+        <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>._done) {
+            <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">value</span>: <span class="hljs-literal">null</span> }
+        }
+        <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>._series != <span class="hljs-keyword">this</span>._mutation.series) {
+            <span class="hljs-keyword">this</span>._series = <span class="hljs-keyword">this</span>._mutation.series
+            <span class="hljs-keyword">this</span>._search()
+        }
+        <span class="hljs-keyword">const</span> trampoline = <span class="hljs-keyword">new</span> Trampoline, scope = { <span class="hljs-attr">items</span>: <span class="hljs-literal">null</span>, <span class="hljs-attr">converted</span>: <span class="hljs-literal">null</span> }
+        <span class="hljs-keyword">this</span>._iterator.next(trampoline, items =&gt; scope.items = items)
+        <span class="hljs-keyword">while</span> (trampoline.seek()) {
+            <span class="hljs-keyword">await</span> trampoline.shift()
+        }
+        <span class="hljs-keyword">if</span> (scope.items != <span class="hljs-literal">null</span>) {
+            <span class="hljs-keyword">this</span>._converter(trampoline, scope.items, converted =&gt; scope.converted = converted)
+            <span class="hljs-keyword">while</span> (trampoline.seek()) {
+                <span class="hljs-keyword">await</span> trampoline.shift()
+            }
+        }
+        <span class="hljs-keyword">return</span> { <span class="hljs-attr">done</span>: <span class="hljs-literal">false</span>, <span class="hljs-attr">value</span>: <span class="hljs-keyword">new</span> InnerIterator(<span class="hljs-keyword">this</span>, scope.converted) }
+    }
+}
+
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Snapshot</span> </span>{
+    <span class="hljs-keyword">constructor</span> (memento, transaction) {
+        <span class="hljs-keyword">this</span>._memento = memento
+        <span class="hljs-keyword">this</span>._transaction = transaction
+    }
+}
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Mutator</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Snapshot</span> </span>{
+    <span class="hljs-keyword">static</span> instance = <span class="hljs-number">0</span>
+
+    <span class="hljs-keyword">constructor</span> (memento) {
+        <span class="hljs-keyword">super</span>(memento, memento._locker.mutator())
+        <span class="hljs-keyword">this</span>._destructible = memento._destructible.mutators.ephemeral([ <span class="hljs-string">'mutation'</span>, Mutator.instance++ ])
+        <span class="hljs-keyword">this</span>._destructible.increment()
+        <span class="hljs-keyword">this</span>._mutations = {}
+        <span class="hljs-keyword">this</span>._index = <span class="hljs-number">0</span>
+        <span class="hljs-keyword">this</span>._references = []
+    }
+
+    _mutation (name) {
+        <span class="hljs-keyword">const</span> mutation = <span class="hljs-keyword">this</span>._mutations[name]
+        <span class="hljs-keyword">if</span> (mutation == <span class="hljs-literal">null</span>) {
+            <span class="hljs-keyword">const</span> store = <span class="hljs-keyword">this</span>._memento._stores[name]
+            <span class="hljs-keyword">const</span> indices = {}
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> index <span class="hljs-keyword">in</span> <span class="hljs-keyword">this</span>._memento._stores[name].indices) {
+                indices[index] = {
+                    <span class="hljs-attr">series</span>: <span class="hljs-number">1</span>,
+                    <span class="hljs-attr">appends</span>: [[]],
+                    <span class="hljs-attr">index</span>: store.indices[index],
+                    <span class="hljs-attr">amalgamator</span>: store.indices[index].amalgamator,
+                    <span class="hljs-attr">qualifier</span>: [ name, index ]
+                }
+            }
+            <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>._mutations[name] = {
+                <span class="hljs-attr">series</span>: <span class="hljs-number">1</span>,
+                <span class="hljs-attr">store</span>: store,
+                <span class="hljs-attr">amalgamator</span>: store.amalgamator,
+                <span class="hljs-attr">appends</span>: [[]],
+                <span class="hljs-attr">qualifier</span>: [ name ],
+                <span class="hljs-attr">indices</span>: indices
+            }
+        }
+        <span class="hljs-keyword">return</span> mutation
+    }</pre></div></div>
+
+        </li>
+
+
+        <li id="section-6">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-6">&#182;</a>
+              </div>
+              <p>TODO Okay, so how do we say that any iterators should recalculate with a
+new <code>Amalgamate.iterator()</code>? Use a count.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">async</span> _merge (mutation) {
+        <span class="hljs-keyword">await</span> mutation.amalgamator.merge(<span class="hljs-keyword">this</span>._transaction, mutation.appends[<span class="hljs-number">1</span>])
+        mutation.series++
+        mutation.appends.pop()
+    }
+
+    _maybeMerge (mutation, max) {
+        <span class="hljs-keyword">const</span> { appends } = mutation
+        <span class="hljs-keyword">if</span> (appends[<span class="hljs-number">0</span>].length &gt;= max &amp;&amp; appends.length == <span class="hljs-number">1</span>) {
+            mutation.appends.unshift([])</pre></div></div>
+
+        </li>
+
+
+        <li id="section-7">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-7">&#182;</a>
+              </div>
+              <p>TODO Really seems like a queue is appropriate.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>            <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>._destructible.ephemeral([ <span class="hljs-string">'merge'</span>].concat(mutation.qualifier), <span class="hljs-keyword">this</span>._merge(mutation))
+        }
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>
+    }
+
+    _append (mutation, method, key, record, value) {
+        <span class="hljs-keyword">const</span> compound = [ key, <span class="hljs-built_in">Number</span>.MAX_SAFE_INTEGER, <span class="hljs-keyword">this</span>._index++ ]
+        <span class="hljs-keyword">const</span> array = mutation.appends[<span class="hljs-number">0</span>]
+        <span class="hljs-keyword">const</span> parts = [{
+            <span class="hljs-attr">method</span>: method,
+            <span class="hljs-attr">version</span>: compound[<span class="hljs-number">1</span>],
+            <span class="hljs-attr">order</span>: compound[<span class="hljs-number">2</span>]
+        }, record ]
+        <span class="hljs-keyword">const</span> comparator = mutation.amalgamator._comparator.stage
+        <span class="hljs-keyword">const</span> { index, found } = find(comparator, array, compound, <span class="hljs-number">0</span>, array.length - <span class="hljs-number">1</span>)
+        array.splice(index, <span class="hljs-number">0</span>, { <span class="hljs-attr">key</span>: compound, parts, value })
+        <span class="hljs-keyword">this</span>._maybeMerge(mutation, <span class="hljs-number">1024</span>)
+    }
+
+    <span class="hljs-keyword">set</span> (name, record) {
+        <span class="hljs-keyword">const</span> mutation = <span class="hljs-keyword">this</span>._mutation(name)
+        <span class="hljs-keyword">const</span> key = mutation.amalgamator.strata.extract([ record ])
+        <span class="hljs-keyword">this</span>._append(mutation, <span class="hljs-string">'insert'</span>, key, record, record)
+        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> name <span class="hljs-keyword">in</span> mutation.indices) {
+            <span class="hljs-keyword">const</span> index = mutation.indices[name]
+            <span class="hljs-keyword">const</span> key = index.index.extractor([ record ])
+            <span class="hljs-keyword">this</span>._append(index, <span class="hljs-string">'insert'</span>, key, key, record)
+        }
+    }
+
+    unset (name, key) {
+        <span class="hljs-keyword">this</span>._append({
+            <span class="hljs-attr">value</span>: store.strata.extract([ record ]),
+            <span class="hljs-attr">version</span>: <span class="hljs-keyword">this</span>._version,
+            <span class="hljs-attr">order</span>: <span class="hljs-keyword">this</span>._index++
+        }, [{
+            <span class="hljs-attr">header</span>: { <span class="hljs-attr">method</span>: <span class="hljs-string">'remove'</span>, <span class="hljs-attr">order</span>: <span class="hljs-keyword">this</span>._index },
+            <span class="hljs-attr">version</span>: <span class="hljs-keyword">this</span>._version
+        }, key ])
+    }
+
+    _iterator (name, vargs, direction) {
+        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Array</span>.isArray(name)) {
+            <span class="hljs-keyword">const</span> mutation = <span class="hljs-keyword">this</span>._mutation(name[<span class="hljs-number">0</span>])
+            <span class="hljs-keyword">const</span> index = mutation.indices[name[<span class="hljs-number">1</span>]]
+            <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> OuterIterator({
+                <span class="hljs-attr">transaction</span>: <span class="hljs-keyword">this</span>._transaction,
+                <span class="hljs-attr">mutation</span>: index,
+                <span class="hljs-attr">direction</span>: direction,
+                <span class="hljs-attr">key</span>: <span class="hljs-literal">null</span>,
+                <span class="hljs-attr">converter</span>: <span class="hljs-function">(<span class="hljs-params">trampoline, items, consume</span>) =&gt;</span> {
+                    <span class="hljs-keyword">const</span> converted = []
+                    <span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>
+                    <span class="hljs-keyword">const</span> <span class="hljs-keyword">get</span> = () =&gt; {
+                        <span class="hljs-keyword">if</span> (i == items.length) {
+                            consume(converted)
+                        } <span class="hljs-keyword">else</span> {
+                            <span class="hljs-keyword">const</span> key = items[i].key[<span class="hljs-number">0</span>].slice(index.index.keyLength)
+                            <span class="hljs-keyword">this</span>._get(name[<span class="hljs-number">0</span>], trampoline, key, item =&gt; {
+                                assert(item != <span class="hljs-literal">null</span>)
+                                converted[i] = {
+                                    <span class="hljs-attr">key</span>: items[i].key,
+                                    <span class="hljs-attr">parts</span>: items[i].parts,
+                                    <span class="hljs-attr">value</span>: item.parts[<span class="hljs-number">1</span>]
+                                }
+                                i++
+                                trampoline.push(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> <span class="hljs-keyword">get</span>())
+                            })
+                        }
+                    }
+                    <span class="hljs-keyword">get</span>()
+                }
+            })
+        }
+        return new OuterIterator({
+            transaction: <span class="hljs-keyword">this</span>._transaction,
+            <span class="hljs-attr">mutation</span>: <span class="hljs-keyword">this</span>._mutation(name),
+            <span class="hljs-attr">direction</span>: direction
+        })
+    }
+
+    forward (name, ...vargs) {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>._iterator(name, vargs, <span class="hljs-string">'forward'</span>)
+    }
+
+    reverse (name, ...vargs) {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>._iterator(name, vargs, <span class="hljs-string">'reverse'</span>)
+    }
+
+    _get (name, trampoline, key, consume) {
+        <span class="hljs-keyword">const</span> mutation = <span class="hljs-keyword">this</span>._mutation(name)</pre></div></div>
+
+        </li>
+
+
+        <li id="section-8">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-8">&#182;</a>
+              </div>
+              <p>TODO Expose comparators in Amalgamate.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>        <span class="hljs-keyword">const</span> comparators = mutation.amalgamator._comparator
+        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> array <span class="hljs-keyword">of</span> mutation.appends) {
+            <span class="hljs-keyword">const</span> { index, found } = find(comparators.stage, array, [ key ], <span class="hljs-number">0</span>, array.length - <span class="hljs-number">1</span>)
+            <span class="hljs-keyword">if</span> (index &lt; array.length) {
+                <span class="hljs-keyword">const</span> item = array[index]
+                <span class="hljs-keyword">if</span> (comparators.primary(item.key[<span class="hljs-number">0</span>], key) == <span class="hljs-number">0</span>) {
+                    consume(item.parts[<span class="hljs-number">0</span>].method == <span class="hljs-string">'remove'</span> ? <span class="hljs-literal">null</span> : item)
+                    <span class="hljs-keyword">return</span>
+                }
+            }
+        }
+        mutation.amalgamator.get(<span class="hljs-keyword">this</span>._transaction, trampoline, key, consume)
+    }
+
+    <span class="hljs-keyword">async</span> <span class="hljs-keyword">get</span> (name, key) {
+        <span class="hljs-keyword">const</span> trampoline = <span class="hljs-keyword">new</span> Trampoline, scope = { <span class="hljs-attr">item</span>: <span class="hljs-literal">null</span> }
+        <span class="hljs-keyword">this</span>._get(name, trampoline, key, item =&gt; scope.item = item)
+        <span class="hljs-keyword">while</span> (trampoline.seek()) {
+            <span class="hljs-keyword">await</span> trampoline.shift()
+        }
+        <span class="hljs-keyword">return</span> scope.item == <span class="hljs-literal">null</span> ? <span class="hljs-literal">null</span> : scope.item.parts[<span class="hljs-number">1</span>]
+    }
+
+    <span class="hljs-keyword">async</span> commit () {
+        <span class="hljs-keyword">const</span> mutations = <span class="hljs-built_in">Object</span>.keys(<span class="hljs-keyword">this</span>._mutations).map(<span class="hljs-function"><span class="hljs-params">name</span> =&gt;</span> <span class="hljs-keyword">this</span>._mutations[name])
+        <span class="hljs-keyword">do</span> {
+            <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._destructible.drain()
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> mutation <span class="hljs-keyword">of</span> mutations) {
+                <span class="hljs-keyword">this</span>._maybeMerge(mutation, <span class="hljs-number">1</span>)
+                <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> name <span class="hljs-keyword">in</span> mutation.indices) {
+                    <span class="hljs-keyword">this</span>._maybeMerge(mutation.indices[name], <span class="hljs-number">1</span>)
+                }
+            }
+        } <span class="hljs-keyword">while</span> (<span class="hljs-keyword">this</span>._destructible.ephemerals != <span class="hljs-number">0</span>)
+        <span class="hljs-keyword">if</span> (mutations.some(<span class="hljs-function"><span class="hljs-params">mutation</span> =&gt;</span> mutation.conflicted)) {
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> mutation <span class="hljs-keyword">of</span> mutations) {
+                mutation.mutator.rollback()
+            }
+            <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>
+        }
+        <span class="hljs-keyword">const</span> trampoline = <span class="hljs-keyword">new</span> Trampoline
+        <span class="hljs-keyword">const</span> writes = {}
+        <span class="hljs-keyword">const</span> version = <span class="hljs-keyword">this</span>._transaction.mutation.version
+        <span class="hljs-keyword">this</span>._memento._commits.search(trampoline, version, cursor =&gt; {
+            cursor.insert(cursor.index, version, [ version ], writes)
+        })
+        <span class="hljs-keyword">while</span> (trampoline.seek()) {
+            <span class="hljs-keyword">await</span> trampoline.shift()
+        }
+        <span class="hljs-keyword">await</span> Strata.flush(writes)</pre></div></div>
+
+        </li>
+
+
+        <li id="section-9">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-9">&#182;</a>
+              </div>
+              <p>TODO Here goes your commit write <em>before</em> you call in-memory commit.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>        <span class="hljs-keyword">this</span>._memento._locker.commit(<span class="hljs-keyword">this</span>._transaction)
+        <span class="hljs-keyword">this</span>._destructible.decrement()
+        <span class="hljs-keyword">this</span>._destructible.decrement()
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>
+    }
+
+    rollback () {
+        <span class="hljs-keyword">throw</span> ROLLBACK
+    }
+
+    <span class="hljs-keyword">async</span> _rollback () {
+        <span class="hljs-keyword">const</span> mutations = <span class="hljs-built_in">Object</span>.keys(<span class="hljs-keyword">this</span>._mutations).map(<span class="hljs-function"><span class="hljs-params">name</span> =&gt;</span> <span class="hljs-keyword">this</span>._mutations[name])
+        <span class="hljs-keyword">do</span> {
+            <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._destructible.drain()
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> mutation <span class="hljs-keyword">of</span> mutations) {
+                <span class="hljs-keyword">this</span>._maybeMerge(mutation, <span class="hljs-number">1</span>)
+            }
+        } <span class="hljs-keyword">while</span> (<span class="hljs-keyword">this</span>._destructible.ephemerals != <span class="hljs-number">0</span>)
+        <span class="hljs-keyword">this</span>._memento._locker.rollback(<span class="hljs-keyword">this</span>._transaction)
+        <span class="hljs-keyword">this</span>._destructible.decrement()
+        <span class="hljs-keyword">this</span>._destructible.decrement()
+    }
+}
+
+<span class="hljs-keyword">const</span> ASCENSION_TYPE = [ <span class="hljs-built_in">String</span>, <span class="hljs-built_in">Number</span>, BigInt ]
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Schema</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Mutator</span> </span>{
+    <span class="hljs-keyword">constructor</span> (journalist, memento, version) {
+        <span class="hljs-keyword">super</span>(memento)
+        <span class="hljs-keyword">this</span>.version = version
+        <span class="hljs-keyword">this</span>._journalist = journalist
+    }
+
+    _comparisons (extraction) {
+        <span class="hljs-keyword">const</span> comparisons = []
+
+        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> path <span class="hljs-keyword">in</span> extraction) {
+            <span class="hljs-keyword">const</span> parts = path.split(<span class="hljs-string">'.'</span>)
+            <span class="hljs-keyword">const</span> properties = <span class="hljs-built_in">Array</span>.isArray(extraction[path])
+                ? extraction[path]
+                : [ extraction[path] ]
+            <span class="hljs-keyword">let</span> type = ASCENSION_TYPE.indexOf(<span class="hljs-built_in">String</span>), direction = <span class="hljs-number">1</span>
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> property <span class="hljs-keyword">of</span> properties) {
+                <span class="hljs-keyword">switch</span> (<span class="hljs-keyword">typeof</span> property) {
+                <span class="hljs-keyword">case</span> <span class="hljs-string">'number'</span>:
+                    direction = part &lt; <span class="hljs-number">0</span> ? <span class="hljs-number">-1</span> : <span class="hljs-number">1</span>
+                    <span class="hljs-keyword">break</span>
+                <span class="hljs-keyword">case</span> <span class="hljs-string">'string'</span>:
+                    type = property
+                    <span class="hljs-keyword">break</span>
+                <span class="hljs-keyword">case</span> <span class="hljs-string">'function'</span>:
+                    type = ASCENSION_TYPE.indexOf(property)
+                    <span class="hljs-keyword">break</span>
+                }
+            }
+            comparisons.push({
+                <span class="hljs-attr">type</span>: type,
+                <span class="hljs-attr">direction</span>: direction,
+                <span class="hljs-attr">parts</span>: path.split(<span class="hljs-string">'.'</span>)
+            })
+        }
+
+        <span class="hljs-keyword">return</span> comparisons
+    }</pre></div></div>
+
+        </li>
+
+
+        <li id="section-10">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-10">&#182;</a>
+              </div>
+              <p>TODO Need a rollback interface.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">async</span> store (name, extraction) {
+        Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[name] == <span class="hljs-literal">null</span>, [ <span class="hljs-string">'ALREADY_EXISTS'</span>, <span class="hljs-string">'store'</span> ])
+        <span class="hljs-keyword">const</span> directory = (<span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._journalist.mkdir(path.join(<span class="hljs-string">'stores'</span>, name))).absolute
+        <span class="hljs-keyword">const</span> comparisons = <span class="hljs-keyword">this</span>._comparisons(extraction)
+        <span class="hljs-keyword">await</span> fs.mkdir(path.join(directory, <span class="hljs-string">'store'</span>))
+        <span class="hljs-keyword">await</span> fs.writeFile(path.join(directory, <span class="hljs-string">'key.json'</span>), <span class="hljs-built_in">JSON</span>.stringify(comparisons))
+        <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._memento._store(<span class="hljs-keyword">new</span> <span class="hljs-built_in">Set</span>, name, directory, <span class="hljs-literal">true</span>)
+    }
+
+    <span class="hljs-keyword">async</span> index (name, extraction, options = {}) {
+        Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[name[<span class="hljs-number">0</span>]] != <span class="hljs-literal">null</span>, [ <span class="hljs-string">'DOES_NOT_EXIST'</span>, <span class="hljs-string">'store'</span> ])
+        Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[name[<span class="hljs-number">0</span>]].indices[name[<span class="hljs-number">1</span>]] == <span class="hljs-literal">null</span>, [ <span class="hljs-string">'ALREADY_EXISTS'</span>, <span class="hljs-string">'index'</span> ])
+        <span class="hljs-keyword">const</span> directory = (<span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._journalist.mkdir(path.join(<span class="hljs-string">'indices'</span>, name[<span class="hljs-number">0</span>], name[<span class="hljs-number">1</span>]))).absolute
+        <span class="hljs-keyword">const</span> comparisons = <span class="hljs-keyword">this</span>._comparisons(extraction)
+        <span class="hljs-keyword">await</span> fs.mkdir(path.join(directory, <span class="hljs-string">'store'</span>))
+        <span class="hljs-keyword">await</span> fs.writeFile(path.join(directory, <span class="hljs-string">'key.json'</span>), <span class="hljs-built_in">JSON</span>.stringify({ comparisons, options }))
+        <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._memento._index(<span class="hljs-keyword">new</span> <span class="hljs-built_in">Set</span>, name, directory, <span class="hljs-literal">true</span>)
+    }</pre></div></div>
+
+        </li>
+
+
+        <li id="section-11">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-11">&#182;</a>
+              </div>
+              <p>TODO Would need to close completely, then rename and reopen.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">async</span> rename (<span class="hljs-keyword">from</span>, to) {
+        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Array</span>.isArray(<span class="hljs-keyword">from</span>)) {
+            Memento.Error.assert(<span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>] == to[<span class="hljs-number">0</span>], <span class="hljs-string">'INVALID_RENAME'</span>)
+            Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>]] != <span class="hljs-literal">null</span>, [ <span class="hljs-string">'DOES_NOT_EXIST'</span>, <span class="hljs-string">'store'</span> ])
+            Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>]].indices[<span class="hljs-keyword">from</span>[<span class="hljs-number">1</span>]] != <span class="hljs-literal">null</span>, [ <span class="hljs-string">'DOES_NOT_EXIST'</span>, <span class="hljs-string">'index'</span> ])
+            Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[to[<span class="hljs-number">0</span>]].indices[to[<span class="hljs-number">1</span>]] == <span class="hljs-literal">null</span>, [ <span class="hljs-string">'ALREADY_EXISTS'</span>, <span class="hljs-string">'index'</span> ])
+            <span class="hljs-keyword">const</span> store = <span class="hljs-keyword">this</span>._memento._stores[to[<span class="hljs-number">0</span>]].indices[to[<span class="hljs-number">1</span>]] =
+                <span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>]].indices[<span class="hljs-keyword">from</span>[<span class="hljs-number">1</span>]]
+            <span class="hljs-keyword">delete</span> <span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>]].indices[<span class="hljs-keyword">from</span>[<span class="hljs-number">1</span>]]
+            <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._journalist.rename(path.join(<span class="hljs-string">'indices'</span>, <span class="hljs-keyword">from</span>[<span class="hljs-number">0</span>], <span class="hljs-keyword">from</span>[<span class="hljs-number">1</span>]), path.join(<span class="hljs-string">'indices'</span>, to[<span class="hljs-number">0</span>], to[<span class="hljs-number">1</span>]))
+        } <span class="hljs-keyword">else</span> {
+            Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>] != <span class="hljs-literal">null</span>, [ <span class="hljs-string">'DOES_NOT_EXIST'</span>, <span class="hljs-string">'store'</span> ])
+            Memento.Error.assert(<span class="hljs-keyword">this</span>._memento._stores[to] == <span class="hljs-literal">null</span>, [ <span class="hljs-string">'ALREADY_EXISTS'</span>, <span class="hljs-string">'store'</span> ])
+            <span class="hljs-keyword">const</span> store = <span class="hljs-keyword">this</span>._memento._stores[to] = <span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>]
+            <span class="hljs-keyword">delete</span> <span class="hljs-keyword">this</span>._memento._stores[<span class="hljs-keyword">from</span>]
+            <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._journalist.rename(path.join(<span class="hljs-string">'stores'</span>, <span class="hljs-keyword">from</span>), path.join(<span class="hljs-string">'stores'</span>, to))
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> name <span class="hljs-keyword">in</span> store.indices) {
+                <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>._journalist.rename(path.join(<span class="hljs-string">'indices'</span>, <span class="hljs-keyword">from</span>, name), path.join(<span class="hljs-string">'indices'</span>, to, name))
+            }
+        }
+    }
+
+    <span class="hljs-keyword">async</span> remove (name) {
+    }
+}
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Memento</span> </span>{
+    <span class="hljs-keyword">static</span> ASC = <span class="hljs-built_in">Symbol</span>(<span class="hljs-string">'ascending'</span>)
+
+    <span class="hljs-keyword">static</span> DSC = <span class="hljs-built_in">Symbol</span>(<span class="hljs-string">'decending'</span>)
+
+    <span class="hljs-keyword">static</span> <span class="hljs-built_in">Error</span> = Interrupt.create(<span class="hljs-string">'Memento.Error'</span>, {
+        <span class="hljs-attr">ALREADY_EXISTS</span>: <span class="hljs-string">'%s already exists'</span>,
+        <span class="hljs-attr">DOES_NOT_EXIST</span>: <span class="hljs-string">'%s does not exist'</span>,
+        <span class="hljs-attr">INVALID_RENAME</span>: <span class="hljs-string">'the stores for an index rename must be the same'</span>,
+        <span class="hljs-attr">ROLLBACK</span>: <span class="hljs-string">'transaction rolled back'</span>
+    })
+
+    <span class="hljs-keyword">constructor</span> (options) {
+        <span class="hljs-keyword">this</span>.destructible = options.destructible
+        <span class="hljs-keyword">this</span>._destructible = <span class="hljs-literal">null</span>
+        <span class="hljs-keyword">this</span>._stores = {}
+        <span class="hljs-keyword">this</span>._cache = <span class="hljs-keyword">new</span> Cache
+        <span class="hljs-keyword">this</span>._versions = { <span class="hljs-string">'0'</span>: <span class="hljs-literal">true</span> }
+        <span class="hljs-keyword">this</span>.directory = options.directory
+        <span class="hljs-keyword">this</span>._locker = <span class="hljs-keyword">new</span> Locker({ <span class="hljs-attr">heft</span>: coalesce(options.heft, <span class="hljs-number">1024</span> * <span class="hljs-number">1024</span>) })
+        <span class="hljs-keyword">const</span> primary = coalesce(options.primary, {})
+        <span class="hljs-keyword">const</span> stage = coalesce(options.stage, {})
+        <span class="hljs-keyword">const</span> leaf = { <span class="hljs-attr">stage</span>: coalesce(stage.leaf, {}), <span class="hljs-attr">primary</span>: coalesce(primary.leaf, {}) }
+        <span class="hljs-keyword">const</span> branch = { <span class="hljs-attr">stage</span>: coalesce(stage.branch, {}), <span class="hljs-attr">primary</span>: coalesce(primary.branch, {}) }
+        <span class="hljs-keyword">this</span>._comparators = coalesce(options.comparators, {})
+        <span class="hljs-keyword">this</span>._strata = {
+            <span class="hljs-attr">stage</span>: {
+                <span class="hljs-attr">leaf</span>: {
+                    <span class="hljs-attr">split</span>: coalesce(leaf.stage.split, <span class="hljs-number">4096</span>),
+                    <span class="hljs-attr">merge</span>: coalesce(leaf.stage.merge, <span class="hljs-number">2048</span>)
+                },
+                <span class="hljs-attr">branch</span>: {
+                    <span class="hljs-attr">split</span>: coalesce(branch.stage.split, <span class="hljs-number">4096</span>),
+                    <span class="hljs-attr">merge</span>: coalesce(branch.stage.merge, <span class="hljs-number">2048</span>)
+                }
+            },
+            <span class="hljs-attr">primary</span>: {
+                <span class="hljs-attr">leaf</span>: {
+                    <span class="hljs-attr">split</span>: coalesce(leaf.primary.split, <span class="hljs-number">4096</span>),
+                    <span class="hljs-attr">merge</span>: coalesce(leaf.primary.merge, <span class="hljs-number">2048</span>)
+                },
+                <span class="hljs-attr">branch</span>: {
+                    <span class="hljs-attr">split</span>: coalesce(branch.primary.split, <span class="hljs-number">4096</span>),
+                    <span class="hljs-attr">merge</span>: coalesce(branch.primary.merge, <span class="hljs-number">2048</span>)
+                }
+            }
+        }
+    }
+
+    <span class="hljs-keyword">static</span> <span class="hljs-keyword">async</span> open ({
+        destructible = <span class="hljs-keyword">new</span> Destructible(<span class="hljs-string">'memento'</span>),
+        directory,
+        version = <span class="hljs-number">1</span>,
+        comparators = {}
+    } = {}, upgrade) {
+        <span class="hljs-keyword">const</span> journalist = <span class="hljs-keyword">await</span> Journalist.create(directory)
+        <span class="hljs-keyword">await</span> Journalist.prepare(journalist)
+        <span class="hljs-keyword">await</span> Journalist.commit(journalist)
+        <span class="hljs-keyword">await</span> journalist.dispose()
+        <span class="hljs-keyword">const</span> memento = <span class="hljs-keyword">new</span> Memento({ destructible, directory, comparators })
+        <span class="hljs-keyword">const</span> open = destructible.ephemeral(<span class="hljs-string">'open'</span>)
+        memento._destructible = {
+            <span class="hljs-attr">open</span>: open,
+            <span class="hljs-attr">amalgamators</span>: open.durable(<span class="hljs-string">'amalgamators'</span>),
+            <span class="hljs-attr">mutators</span>: open.durable(<span class="hljs-string">'mutators'</span>)
+        }
+        open.destruct(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> {</pre></div></div>
+
+        </li>
+
+
+        <li id="section-12">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-12">&#182;</a>
+              </div>
+              <p>Destroying the amalgamators and mutators Destructible will
+prevent new stores, indices or mutations from being created.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>            memento._destructible.amalgamators.destroy()
+            memento._destructible.mutators.destroy()</pre></div></div>
+
+        </li>
+
+
+        <li id="section-13">
+            <div class="annotation">
+
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-13">&#182;</a>
+              </div>
+              <p>Wait for the mutations to drain, make a final rotation of the
+amagamators, then destroy all the amalgamators.</p>
+
+            </div>
+
+            <div class="content"><div class='highlight'><pre>            open.ephemeral(<span class="hljs-string">'shutdown'</span>, <span class="hljs-keyword">async</span> () =&gt; {
+                <span class="hljs-keyword">await</span> memento._destructible.mutators.drain()
+                <span class="hljs-keyword">await</span> memento._locker.drain()
+                <span class="hljs-keyword">await</span> memento._locker.rotate()
+                <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> store <span class="hljs-keyword">in</span> memento._stores) {
+                    memento._stores[store].destructible.decrement()
+                    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> index <span class="hljs-keyword">in</span> memento._stores[store].indices) {
+                        memento._stores[store].indices[index].destructible.decrement()
+                    }
+                }
+            })
+        })
+        <span class="hljs-keyword">const</span> list = <span class="hljs-keyword">async</span> () =&gt; {
+            <span class="hljs-keyword">try</span> {
+                <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> fs.readdir(memento.directory)
+            } <span class="hljs-keyword">catch</span> (error) {
+                rescue(error, [{ <span class="hljs-attr">code</span>: <span class="hljs-string">'ENOENT'</span> }])
+                <span class="hljs-keyword">await</span> fs.mdkir(memento.directory, { <span class="hljs-attr">recursive</span>: <span class="hljs-literal">true</span> })
+                <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> list()
+            }
+        }
+        memento._commits = <span class="hljs-keyword">new</span> Strata(memento._destructible.amalgamators.durable(<span class="hljs-string">'commits'</span>), {
+            <span class="hljs-attr">directory</span>: path.resolve(memento.directory, <span class="hljs-string">'commits'</span>),
+            <span class="hljs-attr">cache</span>: memento._cache,
+            <span class="hljs-attr">comparator</span>: <span class="hljs-function">(<span class="hljs-params">left, right</span>) =&gt;</span> left - right,
+            <span class="hljs-attr">serializer</span>: <span class="hljs-string">'json'</span>
+        })
+        <span class="hljs-keyword">const</span> subdirs = [ <span class="hljs-string">'versions'</span>, <span class="hljs-string">'stores'</span>, <span class="hljs-string">'indices'</span>, <span class="hljs-string">'commits'</span> ].sort()
+        <span class="hljs-keyword">const</span> dirs = <span class="hljs-keyword">await</span> list()
+        <span class="hljs-keyword">if</span> (dirs.length == <span class="hljs-number">0</span>) {
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> dir <span class="hljs-keyword">of</span> subdirs) {
+                <span class="hljs-keyword">await</span> fs.mkdir(path.resolve(memento.directory, dir))
+            }
+            <span class="hljs-keyword">await</span> fs.mkdir(path.resolve(memento.directory, <span class="hljs-string">'./versions/0'</span>))
+            <span class="hljs-keyword">await</span> memento._commits.create()
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-keyword">await</span> memento._commits.open()
+            <span class="hljs-keyword">const</span> versions = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Set</span>
+            <span class="hljs-keyword">const</span> iterator = riffle.forward(memento._commits, Strata.MIN)
+            <span class="hljs-keyword">const</span> trampoline = <span class="hljs-keyword">new</span> Trampoline
+            <span class="hljs-keyword">while</span> (! iterator.done) {
+                iterator.next(trampoline, items =&gt; {
+                    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> item <span class="hljs-keyword">of</span> items) {
+                        versions.add(item.parts[<span class="hljs-number">0</span>])
+                    }
+                })
+                <span class="hljs-keyword">while</span> (trampoline.seek()) {
+                    <span class="hljs-keyword">await</span> trampoline.shift()
+                }
+            }
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> store <span class="hljs-keyword">of</span> (<span class="hljs-keyword">await</span> fs.readdir(path.join(directory, <span class="hljs-string">'stores'</span>)))) {
+                <span class="hljs-keyword">await</span> memento._store(versions, store, path.join(directory, <span class="hljs-string">'stores'</span>, store))
+            }
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> store <span class="hljs-keyword">of</span> (<span class="hljs-keyword">await</span> fs.readdir(path.join(directory, <span class="hljs-string">'indices'</span>)))) {
+                <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> index <span class="hljs-keyword">of</span> (<span class="hljs-keyword">await</span> fs.readdir(path.join(directory, <span class="hljs-string">'indices'</span>, store)))) {
+                    <span class="hljs-keyword">await</span> memento._index(versions, [ store, index ], path.join(directory, <span class="hljs-string">'indices'</span>, store, index))
+                }
+            }
+        }
+        <span class="hljs-keyword">const</span> versions = <span class="hljs-keyword">await</span> fs.readdir(path.resolve(memento.directory, <span class="hljs-string">'versions'</span>))
+        <span class="hljs-keyword">const</span> latest = versions.sort(<span class="hljs-function">(<span class="hljs-params">left, right</span>) =&gt;</span> +left - +right).pop()
+        <span class="hljs-keyword">if</span> (latest &lt; version) {
+        }
+        <span class="hljs-keyword">if</span> (latest &lt; version &amp;&amp; upgrade != <span class="hljs-literal">null</span>) {
+            <span class="hljs-keyword">const</span> journalist = <span class="hljs-keyword">await</span> Journalist.create(memento.directory)
+            <span class="hljs-keyword">const</span> schema = <span class="hljs-keyword">new</span> Schema(journalist, memento, version)
+            <span class="hljs-keyword">try</span> {
+                <span class="hljs-keyword">await</span> upgrade(schema)
+                <span class="hljs-keyword">await</span> schema.commit()
+                <span class="hljs-keyword">await</span> journalist.mkdir(path.join(<span class="hljs-string">'versions'</span>, <span class="hljs-built_in">String</span>(version)))
+                <span class="hljs-keyword">await</span> journalist.write()
+                <span class="hljs-keyword">await</span> Journalist.prepare(journalist)
+                <span class="hljs-keyword">await</span> Journalist.commit(journalist)
+                <span class="hljs-keyword">await</span> journalist.dispose()
+                <span class="hljs-keyword">await</span> memento._destructible.open.destroy().rejected
+                <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> Memento.open({
+                    destructible,
+                    directory,
+                    version,
+                    comparators
+                }, upgrade)
+            } <span class="hljs-keyword">catch</span> (error) {
+                <span class="hljs-keyword">await</span> schema._rollback()
+                <span class="hljs-keyword">if</span> (error === ROLLBACK) {
+                    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> Memento.Error(<span class="hljs-string">'rollback'</span>)
+                }
+                <span class="hljs-keyword">throw</span> error
+            }
+        }
+        <span class="hljs-keyword">return</span> memento
+    }
+
+    <span class="hljs-keyword">get</span> _version () {
+        <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-built_in">Error</span>
+    }
+
+    <span class="hljs-keyword">async</span> _open (upgrade, version) {
+    }
+
+    <span class="hljs-keyword">async</span> _store (versions, name, directory, create = <span class="hljs-literal">false</span>) {
+        <span class="hljs-keyword">const</span> comparisons = <span class="hljs-built_in">JSON</span>.parse(<span class="hljs-keyword">await</span> fs.readFile(path.join(directory, <span class="hljs-string">'key.json'</span>), <span class="hljs-string">'utf8'</span>))
+
+        <span class="hljs-keyword">const</span> extractors = comparisons.map(<span class="hljs-function"><span class="hljs-params">part</span> =&gt;</span> {
+            <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">object</span>) </span>{
+                <span class="hljs-keyword">const</span> parts = part.parts.slice()
+                <span class="hljs-keyword">while</span> (object != <span class="hljs-literal">null</span> &amp;&amp; parts.length != <span class="hljs-number">0</span>) {
+                    object = object[parts.shift()]
+                }
+                <span class="hljs-keyword">return</span> object
+            }
+        })
+
+        <span class="hljs-keyword">const</span> extractor = <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+            <span class="hljs-keyword">return</span> extractors.map(<span class="hljs-function"><span class="hljs-params">extractor</span> =&gt;</span> extractor(parts[<span class="hljs-number">0</span>]))
+        }
+
+        <span class="hljs-keyword">const</span> comparator = ascension(comparisons.map(<span class="hljs-function"><span class="hljs-params">part</span> =&gt;</span> {
+            <span class="hljs-keyword">return</span> [
+                <span class="hljs-keyword">typeof</span> part.type == <span class="hljs-string">'string'</span>
+                    ? <span class="hljs-keyword">this</span>._comparators[part.type]
+                    : ASCENSION_TYPE[part.type],
+                part.direction
+            ]
+        }), <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">object</span>) </span>{
+            <span class="hljs-keyword">return</span> object
+        })
+
+        <span class="hljs-keyword">const</span> destructible = <span class="hljs-keyword">this</span>._destructible.amalgamators.ephemeral([ <span class="hljs-string">'store'</span>, name ])
+        destructible.increment()
+
+        <span class="hljs-keyword">const</span> amalgamator = <span class="hljs-keyword">new</span> Amalgamator(destructible, {
+            <span class="hljs-attr">locker</span>: <span class="hljs-keyword">this</span>._locker,
+            <span class="hljs-attr">directory</span>: path.join(directory, <span class="hljs-string">'store'</span>),
+            <span class="hljs-attr">cache</span>: <span class="hljs-keyword">this</span>._cache,
+            <span class="hljs-attr">key</span>: {
+                <span class="hljs-attr">extract</span>: extractor,
+                <span class="hljs-attr">compare</span>: comparator,
+                <span class="hljs-attr">serialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">key</span>) </span>{
+                    <span class="hljs-keyword">return</span> [ Buffer.from(<span class="hljs-built_in">JSON</span>.stringify(key)) ]
+                },
+                <span class="hljs-attr">deserialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> <span class="hljs-built_in">JSON</span>.parse(parts[<span class="hljs-number">0</span>].toString())
+                }
+            },
+            <span class="hljs-attr">parts</span>: {
+                <span class="hljs-attr">serialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> [ Buffer.from(<span class="hljs-built_in">JSON</span>.stringify(parts)) ]
+                },
+                <span class="hljs-attr">deserialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> <span class="hljs-built_in">JSON</span>.parse(parts[<span class="hljs-number">0</span>].toString())
+                }
+            },
+            <span class="hljs-attr">transformer</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">operation</span>) </span>{
+                <span class="hljs-keyword">if</span> (operation.parts[<span class="hljs-number">0</span>].method == <span class="hljs-string">'insert'</span>) {
+                    <span class="hljs-keyword">return</span> {
+                        <span class="hljs-attr">method</span>: <span class="hljs-string">'insert'</span>,
+                        <span class="hljs-attr">key</span>: operation.key[<span class="hljs-number">0</span>],
+                        <span class="hljs-attr">parts</span>: [ operation.parts[<span class="hljs-number">1</span>] ]
+                    }
+                }
+                <span class="hljs-keyword">return</span> {
+                    <span class="hljs-attr">method</span>: <span class="hljs-string">'remove'</span>,
+                    <span class="hljs-attr">key</span>: operation.key[<span class="hljs-number">0</span>]
+                }
+            },
+            <span class="hljs-attr">createIfMissing</span>: create,
+            <span class="hljs-attr">errorIfExists</span>: create
+        })
+
+        <span class="hljs-keyword">await</span> amalgamator.ready
+
+        <span class="hljs-keyword">await</span> amalgamator.recover(versions)
+
+        <span class="hljs-keyword">this</span>._stores[name] = { destructible, amalgamator, <span class="hljs-attr">indices</span>: {}, comparisons }
+    }
+
+    <span class="hljs-keyword">async</span> _index (versions, [ storeName, name ], directory, create = <span class="hljs-literal">false</span>) {
+        <span class="hljs-keyword">const</span> key = <span class="hljs-built_in">JSON</span>.parse(<span class="hljs-keyword">await</span> fs.readFile(path.join(directory, <span class="hljs-string">'key.json'</span>), <span class="hljs-string">'utf8'</span>))
+
+        <span class="hljs-keyword">const</span> store = <span class="hljs-keyword">this</span>._stores[storeName]
+
+        <span class="hljs-keyword">const</span> comparisons = key.comparisons.concat(store.comparisons)
+
+        <span class="hljs-keyword">const</span> extractors = comparisons.map(<span class="hljs-function"><span class="hljs-params">part</span> =&gt;</span> {
+            <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">object</span>) </span>{
+                <span class="hljs-keyword">const</span> parts = part.parts.slice()
+                <span class="hljs-keyword">while</span> (object != <span class="hljs-literal">null</span> &amp;&amp; parts.length != <span class="hljs-number">0</span>) {
+                    object = object[parts.shift()]
+                }
+                <span class="hljs-keyword">return</span> object
+            }
+        })
+
+        <span class="hljs-keyword">const</span> extractor = <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+            <span class="hljs-keyword">return</span> extractors.map(<span class="hljs-function"><span class="hljs-params">extractor</span> =&gt;</span> extractor(parts[<span class="hljs-number">0</span>]))
+        }
+
+        <span class="hljs-keyword">const</span> comparator = ascension(comparisons.map(<span class="hljs-function"><span class="hljs-params">part</span> =&gt;</span> {
+            <span class="hljs-keyword">return</span> [
+                <span class="hljs-keyword">typeof</span> part.type == <span class="hljs-string">'string'</span>
+                    ? <span class="hljs-keyword">this</span>._comparators[part.type]
+                    : ASCENSION_TYPE[part.type],
+                part.direction
+            ]
+        }), <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">object</span>) </span>{
+            <span class="hljs-keyword">return</span> object
+        })
+
+        <span class="hljs-keyword">const</span> destructible = <span class="hljs-keyword">this</span>._destructible.amalgamators.ephemeral([ <span class="hljs-string">'store'</span>, name ])
+        destructible.increment()
+
+        <span class="hljs-keyword">const</span> amalgamator = <span class="hljs-keyword">new</span> Amalgamator(destructible, {
+            <span class="hljs-attr">locker</span>: <span class="hljs-keyword">this</span>._locker,
+            <span class="hljs-attr">directory</span>: path.join(directory, <span class="hljs-string">'store'</span>),
+            <span class="hljs-attr">cache</span>: <span class="hljs-keyword">this</span>._cache,
+            <span class="hljs-attr">key</span>: {
+                <span class="hljs-attr">compare</span>: comparator,
+                <span class="hljs-attr">serialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">key</span>) </span>{
+                    <span class="hljs-keyword">return</span> [ Buffer.from(<span class="hljs-built_in">JSON</span>.stringify(key)) ]
+                },
+                <span class="hljs-attr">deserialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> <span class="hljs-built_in">JSON</span>.parse(parts[<span class="hljs-number">0</span>].toString())
+                }
+            },
+            <span class="hljs-attr">parts</span>: {
+                <span class="hljs-attr">serialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> [ Buffer.from(<span class="hljs-built_in">JSON</span>.stringify(parts)) ]
+                },
+                <span class="hljs-attr">deserialize</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">parts</span>) </span>{
+                    <span class="hljs-keyword">return</span> <span class="hljs-built_in">JSON</span>.parse(parts[<span class="hljs-number">0</span>].toString())
+                }
+            },
+            <span class="hljs-attr">transformer</span>: <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">operation</span>) </span>{
+                <span class="hljs-keyword">if</span> (operation.parts[<span class="hljs-number">0</span>].method == <span class="hljs-string">'insert'</span>) {
+                    <span class="hljs-keyword">return</span> {
+                        <span class="hljs-attr">method</span>: <span class="hljs-string">'insert'</span>,
+                        <span class="hljs-attr">key</span>: operation.key[<span class="hljs-number">0</span>],
+                        <span class="hljs-attr">parts</span>: [ operation.parts[<span class="hljs-number">1</span>] ]
+                    }
+                }
+                <span class="hljs-keyword">return</span> {
+                    <span class="hljs-attr">method</span>: <span class="hljs-string">'remove'</span>,
+                    <span class="hljs-attr">key</span>: operation.key[<span class="hljs-number">0</span>]
+                }
+            },
+            <span class="hljs-attr">createIfMissing</span>: create,
+            <span class="hljs-attr">errorIfExists</span>: create
+        })
+
+        <span class="hljs-keyword">await</span> amalgamator.ready
+
+        <span class="hljs-keyword">await</span> amalgamator.recover(versions)
+
+        store.indices[name] = {
+            destructible, amalgamator, extractor, <span class="hljs-attr">keyLength</span>: key.comparisons.length
+        }
+    }
+
+    <span class="hljs-keyword">async</span> mutator (block) {
+        <span class="hljs-keyword">const</span> mutator = <span class="hljs-keyword">new</span> Mutator(<span class="hljs-keyword">this</span>)
+        <span class="hljs-keyword">do</span> {
+            <span class="hljs-keyword">try</span> {
+                <span class="hljs-keyword">await</span> block(mutator)
+            } <span class="hljs-keyword">catch</span> (error) {
+                <span class="hljs-keyword">await</span> mutator._rollback()
+                <span class="hljs-keyword">if</span> (error === ROLLBACK) {
+                    <span class="hljs-keyword">return</span>
+                }
+                <span class="hljs-keyword">throw</span> error
+            }
+        } <span class="hljs-keyword">while</span> (! <span class="hljs-keyword">await</span> mutator.commit())
+    }
+
+    <span class="hljs-keyword">async</span> close () {
+        <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>.destructible.destroy().rejected
+    }
+}
 
 <span class="hljs-built_in">module</span>.exports = Memento</pre></div></div>
 
