@@ -164,6 +164,26 @@ class InnerIterator {
 // wouldn't work for outer joins. I'd have to map in-memory insert order to any
 // looked up joins.
 
+// Uh, oh, we also have to deal with changes to the value we looked up. The user
+// can `set` or `unset` values in the joined fields, invalidating a join entry.
+
+// Thus, the `_filter` function has to check the join. It would be so much
+// easier to just trash everything if there is any mutation what-so-ever and
+// just let joins be slow if there are updates.
+
+// But, maybe there is a more elegant cache. Maybe we can invalidate the record
+// when we update, check to see if the previous entry has the same key, mark it
+// defunct and do that while we're already there, to clear out a join entry.
+
+// Or maybe perform the join lookup according to what is stored, then perform
+// the memory lookup in `_filter`. It needs to be done, so do it at the last
+// minute. Which means keeping around failed joins and trying again the moment
+// it is requested.
+
+// You know, in memory you don't have to keep the chnages. You can overwrite.
+
+// Okay, so resolve any overwrites last.
+
 //
 class OuterIterator {
     constructor ({
@@ -246,29 +266,30 @@ class OuterIterator {
             }
         }
         if (scope.converted != null && this._joins.length != 0) {
-            const join = (i, j) => {
-                if (i < scope.converted.length) {
-                    if (j == 0) {
-                        scope.converted[i].join = [ scope.converted[i].value ]
-                    }
-                    if (j == this._joins.length) {
-                        scope.joined.push(scope.converted[i])
-                        trampoline.sync(() => join(i + 1, 0))
-                    } else {
-                        const { name, using } = this._joins[j]
-                        const key = using(scope.converted[i].join)
-                        this._snapshot._get(name, trampoline, key, item => {
-                            if (item == null) {
-                                trampoline.sync(() => join(i + 1, 0))
-                            } else {
-                                scope.converted[i].join.push(item.parts[1])
-                                trampoline.sync(() => join(i, j + 1))
-                            }
-                        })
-                    }
+            const join = (trampoline, entry, record, i, next) => {
+                if (i == 0) {
+                    record.push(entry.value)
+                }
+                if (i == this._joins.length) {
+                    trampoline.sync(() => next(record))
+                } else {
+                    const { name, using } = this._joins[i]
+                    const key = using(record)
+                    this._snapshot._get(name, trampoline, key, item => {
+                        record.push(item == null ? null : item.parts[1])
+                        trampoline.sync(() => join(trampoline, entry, record, i + 1, next))
+                    })
                 }
             }
-            join(0, 0)
+            const traverse = (input, i, j) => {
+                if (i < input.length) {
+                    join(trampoline, input[i], [], 0, joined => {
+                        input[i].join = joined
+                        trampoline.sync(() => traverse(input, i + 1))
+                    })
+                }
+            }
+            traverse(scope.converted, 0)
             while (trampoline.seek()) {
                 await trampoline.shift()
             }
