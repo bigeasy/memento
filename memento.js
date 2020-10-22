@@ -26,26 +26,12 @@ const ROLLBACK = Symbol('rollback')
 
 const riffle = require('riffle')
 
-function _find (comparator, array, key, low, high) {
-    let mid
-
-    while (low <= high) {
-        mid = low + ((high - low) >>> 1)
-        const compare = comparator(key, [ array[mid].key[0] ])
-        if (compare < 0) high = mid - 1
-        else if (compare > 0) low = mid + 1
-        else return { index: mid, found: true }
-    }
-
-    return { index: low, found: false }
-}
-
 function find (comparator, array, key, low, high) {
     let mid
 
     while (low <= high) {
         mid = low + ((high - low) >>> 1)
-        const compare = comparator(key, array[mid].key)
+        const compare = comparator(key, [ array[mid].key[0] ])
         if (compare < 0) high = mid - 1
         else if (compare > 0) low = mid + 1
         else return { index: mid, found: true }
@@ -230,7 +216,7 @@ class OuterIterator {
             const comparator = outer.mutation.amalgamator._comparator.stage
             let { index, found } = outer.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
-                : _find(comparator, array, [ outer.key ], 0, array.length - 1)
+                : find(comparator, array, [ outer.key ], 0, array.length - 1)
             if (found || direction == -1) {
                 index += direction
             }
@@ -392,6 +378,11 @@ class Mutator extends Snapshot {
         return null
     }
 
+    // Remember that the `_index` is still needed even though we are replacing
+    // the item in the in-memory on updates because you have two in-memory
+    // arrays and your iteration strategy depends on the sort.
+
+    //
     _append (mutation, method, key, record, value) {
         const compound = [ key, Number.MAX_SAFE_INTEGER, this._index++ ]
         const array = mutation.appends[0]
@@ -402,7 +393,11 @@ class Mutator extends Snapshot {
         }, record ]
         const comparator = mutation.amalgamator._comparator.stage
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
-        array.splice(index, 0, { key: compound, parts, value, join: null })
+        if (found) {
+            array[index] = { key: compound, parts, value, join: null }
+        } else {
+            array.splice(index, 0, { key: compound, parts, value, join: null })
+        }
         this._maybeMerge(mutation, 1024)
     }
 
@@ -487,12 +482,10 @@ class Mutator extends Snapshot {
         const comparators = mutation.amalgamator._comparator
         for (const array of mutation.appends) {
             const { index, found } = find(comparators.stage, array, [ key ], 0, array.length - 1)
-            if (index < array.length) {
+            if (found) {
                 const item = array[index]
-                if (comparators.primary(item.key[0], key) == 0) {
-                    consume(item.parts[0].method == 'remove' ? null : item)
-                    return
-                }
+                consume(item.method == 'remove' ? null : item)
+                return
             }
         }
         mutation.amalgamator.get(this._transaction, trampoline, key, consume)
