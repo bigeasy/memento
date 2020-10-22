@@ -57,10 +57,8 @@ function find (comparator, array, key, low, high) {
 class InnerIterator {
     constructor (outer, items) {
         this._outer = outer
-        this._series = outer._mutation.series
-        this._compare = outer._mutation.amalgamator._comparator.stage
-        this._items = items == null ? null : { array: items, index: 0 }
-        this._direction = this._outer._options.direction == 'reverse' ? -1 : 1
+        this._series = outer.mutation.series
+        this._compare = outer.mutation.amalgamator._comparator.stage
     }
 
     [Symbol.iterator] () {
@@ -68,91 +66,30 @@ class InnerIterator {
     }
 
     get reversed () {
-        return this._outer._options.direction == 'reverse'
+        return this._outer.direction == 'reverse'
     }
 
     set reversed (value) {
         const direction = value ? 'reverse' : 'forward'
-        if (direction != this._outer._options.direction) {
-            this._outer._options.direction = direction
-            this._outer._series = this._series = 0
-            this._outer._done = false
+        if (direction != this._outer.direction) {
+            this._outer.direction = direction
+            this._outer.series = this._series = 0
+            this._outer.done = false
         }
     }
 
-    // The problem with advancing over our in-memory or file backed stage is
-    // that there may be writes to the stage that are greater than the last
-    // value returned, but less than any of the values that have been sliced
-    // into memory. Advacing indexes into the in-memory stage for inserts
-    // doesn't help. If the last value returned from our primary tree is 'a',
-    // and the index of the in-memory stage is pointing at 'z', then if we've
-    // inserted 'b' since our last `next()` we are not going to see it, we will
-    // continue from 'z' if we've been adjusting our index for the inserts.
-    //
-    // What if we don't advance the index? We'll let's say the amalgamaged tree
-    // is at 'z' and our in-memory store is at 'b' so we reutrn 'b'. Now we
-    // insert 'a' and we point at a. Really, advancing the index is not about
-    // the index but about a comparison with the value at the insert spot. Seems
-    // like we may as well just do a binary search each time.
-    //
-    // This problem also exists for staging. I've worked through a number of
-    // goofy ideas to keep the active staging tree up-to-date, but the best
-    // thing to do, for now, is to just scrap the entire existing iterator and
-    // recreate it.
-    //
-    // Thought on these nested iterators, they should all always return
-    // something, a non-empty set, shouldn't they? Why force that logic on the
-    // caller? Yet something like dilute might do this and I've been looking at
-    // making dilute synchronous.
-
-    //
     next () {
-        // TODO Here is the inner series check, so all we need is one for the
-        // outer iterator and we're good.
-        for (;;) {
-            if (this._outer._mutation.series != this._series) {
-                this._series = this._outer._mutation.series
-                return { done: true, value: null }
-            }
-            const candidates = []
-            if (this._items != null) {
-                if (this._items.array.length == this._items.index) {
-                    return { done: true, value: null }
-                } else {
-                    candidates.push(this._items)
-                }
-            }
-            const options = this._outer._options
-            const array = this._outer._mutation.appends[0]
-            const comparator = this._outer._mutation.amalgamator._comparator.stage
-            let { index, found } = options.key == null
-                ? { index: this._direction == 1 ? 0 : array.length, found: false }
-                : _find(comparator, array, [ options.key ], 0, array.length - 1)
-            if (found || this._direction == -1) {
-                index += this._direction
-            }
-            if (0 <= index && index < array.length) {
-                candidates.push({ array, index })
-            }
-            if (candidates.length == 0) {
-                this._outer._done = true
-                return { done: true, value: null }
-            }
-            candidates.sort((left, right) => {
-                return comparator(left.array[left.index].key, right.array[right.index].key) * this._direction
-            })
-            const candidate = candidates.shift()
-            // We always increment the index because Strata iterators return the
-            // values reversed but we search our in-memory stage each time we
-            // descend.
-            const item = candidate.array[candidate.index++]
-            options.key = item.key[0]
-            options.inclusive = false
-            const result = this._outer._filter(item)
-            if (result != null) {
-                return result
-            }
-        }
+        return this._outer.inner()
+    }
+}
+
+class ReOuterIterator {
+    constructor (iterator) {
+        this._iterator = iterator
+    }
+
+    next () {
+        return this._iterator.outer()
     }
 }
 
@@ -204,44 +141,29 @@ class InnerIterator {
 //
 class OuterIterator {
     constructor ({
-        snapshot, transaction, mutation, direction,
-        key = null, inclusive = true,
-        converter = (trampoline, items, consume) => {
-            consume(items.map(item => {
-                return { key: item.key, parts: item.parts, value: item.parts[1], join: null }
-            }))
-        }
+        snapshot, mutation, direction, key, inclusive, converter, joins = []
     }) {
         this._snapshot = snapshot
-        this._options = {
-            direction, inclusive, key, transaction
-        }
-        this._mutation = mutation
-        this._converter = converter
-        this._series = 0
-        this._inclusive = inclusive
-        this._done = false
-        this._joins = []
+        this.key = key
+        this.direction = direction
+        this.inclusive = inclusive
+        this.mutation = mutation
+        this.converter = converter
+        this.series = 0
+        this.inclusive = inclusive
+        this.done = false
+        this.joins = joins
     }
 
     [Symbol.asyncIterator] () {
-        return this
-    }
-
-    // TODO Probably going to be a nerd about it and create an
-    // `OuterIteratorBuilder` that is separate from the `OuterIterator`, maybe.
-
-    //
-    join (name, using, filter = () => true) {
-        this._joins.push({ name, using, filter })
-        return this
+        return new ReOuterIterator(this)
     }
 
     _search () {
         const {
-            _mutation: { amalgamator },
-            _mutation: { appends },
-            _options: { direction, inclusive, key, transaction },
+            _snapshot: { _transaction: transaction },
+            mutation: { amalgamator, appends },
+            inclusive, key, direction
         } = this
         const additional = []
         if (appends.length == 2) {
@@ -250,8 +172,8 @@ class OuterIterator {
         this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
     }
 
-    _filter (candidate) {
-        if (this._joins.length != 0) {
+    filter (candidate) {
+        if (this.joins.length != 0) {
             if (candidate.join == null) {
                 return null
             }
@@ -260,12 +182,88 @@ class OuterIterator {
         return { done: false, value: candidate.value }
     }
 
-    async next () {
-        if (this._done) {
+    // The problem with advancing over our in-memory or file backed stage is
+    // that there may be writes to the stage that are greater than the last
+    // value returned, but less than any of the values that have been sliced
+    // into memory. Advacing indexes into the in-memory stage for inserts
+    // doesn't help. If the last value returned from our primary tree is 'a',
+    // and the index of the in-memory stage is pointing at 'z', then if we've
+    // inserted 'b' since our last `next()` we are not going to see it, we will
+    // continue from 'z' if we've been adjusting our index for the inserts.
+    //
+    // What if we don't advance the index? We'll let's say the amalgamaged tree
+    // is at 'z' and our in-memory store is at 'b' so we reutrn 'b'. Now we
+    // insert 'a' and we point at a. Really, advancing the index is not about
+    // the index but about a comparison with the value at the insert spot. Seems
+    // like we may as well just do a binary search each time.
+    //
+    // This problem also exists for staging. I've worked through a number of
+    // goofy ideas to keep the active staging tree up-to-date, but the best
+    // thing to do, for now, is to just scrap the entire existing iterator and
+    // recreate it.
+    //
+    // Thought on these nested iterators, they should all always return
+    // something, a non-empty set, shouldn't they? Why force that logic on the
+    // caller? Yet something like dilute might do this and I've been looking at
+    // making dilute synchronous.
+
+    //
+    inner () {
+        const direction = this.direction == 'reverse' ? -1 : 1
+        const outer = this
+        // TODO Here is the inner series check, so all we need is one for the
+        // outer iterator and we're good.
+        for (;;) {
+            if (outer.mutation.series != this.series) {
+                return { done: true, value: null }
+            }
+            const candidates = []
+            if (this._items != null) {
+                if (this._items.array.length == this._items.index) {
+                    return { done: true, value: null }
+                } else {
+                    candidates.push(this._items)
+                }
+            }
+            const options = outer._options
+            const array = outer.mutation.appends[0]
+            const comparator = outer.mutation.amalgamator._comparator.stage
+            let { index, found } = outer.key == null
+                ? { index: direction == 1 ? 0 : array.length, found: false }
+                : _find(comparator, array, [ outer.key ], 0, array.length - 1)
+            if (found || direction == -1) {
+                index += direction
+            }
+            if (0 <= index && index < array.length) {
+                candidates.push({ array, index })
+            }
+            if (candidates.length == 0) {
+                outer.done = true
+                return { done: true, value: null }
+            }
+            candidates.sort((left, right) => {
+                return comparator(left.array[left.index].key, right.array[right.index].key) * direction
+            })
+            const candidate = candidates.shift()
+            // We always increment the index because Strata iterators return the
+            // values reversed but we search our in-memory stage each time we
+            // descend.
+            const item = candidate.array[candidate.index++]
+            outer.key = item.key[0]
+            outer.inclusive = false
+            const result = outer.filter(item)
+            if (result != null) {
+                return result
+            }
+        }
+    }
+
+    async outer () {
+        if (this.done) {
             return { done: true, value: null }
         }
-        if (this._series != this._mutation.series) {
-            this._series = this._mutation.series
+        if (this.series != this.mutation.series) {
+            this.series = this.mutation.series
             this._search()
         }
         const trampoline = new Trampoline, scope = { items: null, converted: null, joined: [] }
@@ -274,20 +272,20 @@ class OuterIterator {
             await trampoline.shift()
         }
         if (scope.items != null) {
-            this._converter(trampoline, scope.items, converted => scope.converted = converted)
+            this.converter(trampoline, scope.items, converted => scope.converted = converted)
             while (trampoline.seek()) {
                 await trampoline.shift()
             }
         }
-        if (scope.converted != null && this._joins.length != 0) {
+        if (scope.converted != null && this.joins.length != 0) {
             const join = (trampoline, entry, record, i, next) => {
                 if (i == 0) {
                     record.push(entry.value)
                 }
-                if (i == this._joins.length) {
+                if (i == this.joins.length) {
                     trampoline.sync(() => next(record))
                 } else {
-                    const { name, using } = this._joins[i]
+                    const { name, using } = this.joins[i]
                     const key = using(record)
                     this._snapshot._get(name, trampoline, key, item => {
                         record.push(item == null ? null : item.parts[1])
@@ -308,10 +306,28 @@ class OuterIterator {
                 await trampoline.shift()
             }
         }
+        this._items = scope.converted == null ? null : { array: scope.converted, index: 0 }
         return { done: false, value: new InnerIterator(this, scope.converted) }
     }
 }
 
+class IteratorBuilder {
+    constructor (options) {
+        this._options = options
+        this._options.joins = []
+    }
+
+    join (name, using) {
+        this._options.joins.push({ name, using })
+        return this
+    }
+
+    [Symbol.asyncIterator] () {
+        const options = this._options
+        this._options = null
+        return new ReOuterIterator(new OuterIterator(options))
+    }
+}
 
 class Snapshot {
     constructor (memento, transaction) {
@@ -414,14 +430,13 @@ class Mutator extends Snapshot {
 
     _iterator (name, vargs, direction) {
         if (Array.isArray(name)) {
-            const mutation = this._mutation(name[0])
-            const index = mutation.indices[name[1]]
-            return new OuterIterator({
+            const mutation = this._mutation(name[0]).indices[name[1]]
+            return new IteratorBuilder({
                 snapshot: this,
-                transaction: this._transaction,
-                mutation: index,
+                mutation: mutation,
                 direction: direction,
                 key: null,
+                incluslive: true,
                 converter: (trampoline, items, consume) => {
                     const converted = []
                     let i = 0
@@ -429,13 +444,11 @@ class Mutator extends Snapshot {
                         if (i == items.length) {
                             consume(converted)
                         } else {
-                            const key = items[i].key[0].slice(index.index.keyLength)
+                            const key = items[i].key[0].slice(mutation.index.keyLength)
                             this._get(name[0], trampoline, key, item => {
                                 assert(item != null)
                                 converted[i] = {
-                                    key: items[i].key,
-                                    parts: items[i].parts,
-                                    value: item.parts[1]
+                                    key: items[i].key, value: item.parts[1], join: []
                                 }
                                 i++
                                 trampoline.sync(() => get())
@@ -446,11 +459,17 @@ class Mutator extends Snapshot {
                 }
             })
         }
-        return new OuterIterator({
+        return new IteratorBuilder({
             snapshot: this,
-            transaction: this._transaction,
             mutation: this._mutation(name),
-            direction: direction
+            direction: direction,
+            key: null,
+            incluslive: true,
+            converter: (trampoline, items, consume) => {
+                consume(items.map(item => {
+                    return { key: item.key, value: item.parts[1], join: [] }
+                }))
+            }
         })
     }
 
