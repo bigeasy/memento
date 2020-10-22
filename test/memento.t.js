@@ -1,4 +1,4 @@
-require('proof')(17, async okay => {
+require('proof')(18, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -49,7 +49,6 @@ require('proof')(17, async okay => {
         Donald, Trump, NY`.split(/\n/).map(line => {
             return line.trim()
         })
-        // Ugh. Cleveland!
         const seen = {}
         return presidencies.map((line, index) => {
             const parts = line.split(/,\s/)
@@ -58,13 +57,13 @@ require('proof')(17, async okay => {
                     firstName: parts[0],
                     lastName: parts[1],
                     state: parts[2],
-                    terms: [ index + 1 ],
-                    firstTerm: index + 1
+                    terms: [ index + 1 ]
                 }
             } else {
+                // Ugh. Cleveland!
                 seen[line].terms.push(index + 1)
             }
-        })
+        }).filter(president => president != null)
     } ()
 
     const states = function () {
@@ -150,10 +149,12 @@ require('proof')(17, async okay => {
         }, async (schema) => {
             switch (schema.version) {
             case 1:
-                await schema.store('employee', { lastName: [ 'text' ], firstName: Memento.ASC })
-                await schema.index([ 'employee', 'place' ], { state: String })
+                await schema.store('employee', { 'terms.0': Number })
+                await schema.index([ 'employee', 'moniker' ], {
+                    lastName: Memento.ASC, firstName: [ 'text' ]
+                })
                 await schema.rename('employee', 'president')
-                await schema.rename(['president', 'place' ], [ 'president', 'state' ])
+                await schema.rename(['president', 'moniker' ], [ 'president', 'name' ])
                 break
             case 2:
                 await schema.store('state', { code: String })
@@ -197,7 +198,7 @@ require('proof')(17, async okay => {
 
             mutator.set('president', insert.shift())
 
-            okay(await mutator.get('president', [ 'Washington', 'George' ]), presidents[0], 'get')
+            okay(await mutator.get('president', [ 1 ]), presidents[0], 'get')
 
             const gathered = []
             for await (const employees of mutator.forward('president')) {
@@ -218,7 +219,7 @@ require('proof')(17, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local reverse')
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'president', 'state' ])) {
+            for await (const employees of mutator.forward([ 'president', 'name' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -227,7 +228,7 @@ require('proof')(17, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local index')
 
             gathered.length = 0
-            for await (const employees of mutator.reverse([ 'president', 'state' ])) {
+            for await (const employees of mutator.reverse([ 'president', 'name' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -237,25 +238,25 @@ require('proof')(17, async okay => {
         })
 
         await memento.mutator(async function (mutator) {
-            const gathered = []
+            okay(await mutator.get('president', [ 1 ]), presidents[0], 'get staged')
 
-            okay(await mutator.get('president', [ 'Washington', 'George' ]), presidents[0], 'get')
+            const gathered = []
             for await (const employees of mutator.forward('president')) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
             }
 
-            okay(gathered, presidents.slice(0, 1), 'staged')
+            okay(gathered, presidents.slice(0, 1), 'forward staged')
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'president', 'state' ])) {
+            for await (const employees of mutator.forward([ 'president', 'name' ])) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
             }
 
-            okay(gathered, presidents.slice(0, 1), 'staged index')
+            okay(gathered, presidents.slice(0, 1), 'forward staged index')
 
             mutator.rollback()
         })
@@ -271,12 +272,8 @@ require('proof')(17, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            const states = presidents.slice(0, 16).map(president => president.state)
-            const expected = {
-                names: presidents.slice(0, 16).map(president => president.lastName).sort(),
-                states: states.filter((state, index) => states.indexOf(state) == index).sort()
-            }
-            okay(gathered, expected.names, 'insert and interate many forward')
+            const expected = presidents.slice(0, 16).map(president => president.lastName)
+            okay(gathered, expected, 'insert and interate many forward')
 
             gathered.length = 0
             for await (const presidents of mutator.reverse('president')) {
@@ -284,27 +281,23 @@ require('proof')(17, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            okay(gathered, expected.names.slice(0).reverse(), 'insert and interate many reverse')
+            okay(gathered, expected.slice(0).reverse(), 'insert and interate many reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.forward([ 'president', 'state' ])) {
+            for await (const presidents of mutator.forward([ 'president', 'name' ])) {
                 for (const president of presidents) {
-                    gathered.push(president.state)
+                    gathered.push(president.lastName)
                 }
             }
-            okay(gathered.filter((state, index) => {
-                return gathered.indexOf(state) == index
-            }), expected.states, 'insert and interate many index forward')
+            okay(gathered, expected.slice(0).sort(), 'insert and interate many index forward')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse([ 'president', 'state' ])) {
+            for await (const presidents of mutator.reverse([ 'president', 'name' ])) {
                 for (const president of presidents) {
-                    gathered.push(president.state)
+                    gathered.push(president.lastName)
                 }
             }
-            okay(gathered.filter((state, index) => {
-                return gathered.indexOf(state) == index
-            }), expected.states.slice(0).reverse(), 'insert and interate many index reverse')
+            okay(gathered, expected.slice(0).sort().reverse(), 'insert and interate many index reverse')
 
             gathered.length = 0
             for await (const presidents of mutator.forward('president')) {
@@ -315,7 +308,18 @@ require('proof')(17, async okay => {
                     presidents.reversed = true
                 }
             }
-            okay(gathered, expected.names.concat(expected.names.slice(0).reverse().slice(1)), 'insert and interate many forward')
+            okay(gathered, expected.concat(expected.slice(0).reverse().slice(1)), 'iterator reversal')
+
+            gathered.length = 0
+            for await (const presidents of mutator.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+                if (gathered.length == 16) {
+                    presidents.reversed = true
+                }
+            }
+            okay(gathered, expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal')
         })
 
         try {
@@ -337,8 +341,6 @@ require('proof')(17, async okay => {
             const expected = presidents.slice(0, 16).map(president => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
-            }).sort((left, right) => {
-                return (left[0] > right[0]) - (left[0] < right[0])
             })
             okay(gathered, expected, 'inner join')
         })
