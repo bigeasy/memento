@@ -122,12 +122,12 @@ class InnerIterator {
                     candidates.push(this._items)
                 }
             }
-            const { key } = this._outer._options
+            const options = this._outer._options
             const array = this._outer._mutation.appends[0]
             const comparator = this._outer._mutation.amalgamator._comparator.stage
-            let { index, found } = key == null
+            let { index, found } = options.key == null
                 ? { index: this._direction == 1 ? 0 : array.length, found: false }
-                : _find(comparator, array, [ key ], 0, array.length - 1)
+                : _find(comparator, array, [ options.key ], 0, array.length - 1)
             if (found || this._direction == -1) {
                 index += this._direction
             }
@@ -146,8 +146,8 @@ class InnerIterator {
             // values reversed but we search our in-memory stage each time we
             // descend.
             const item = candidate.array[candidate.index++]
-            this._outer._options.key = item.key[0]
-            this._outer._options.inclusive = false
+            options.key = item.key[0]
+            options.inclusive = false
             const result = this._outer._filter(item)
             if (result != null) {
                 return result
