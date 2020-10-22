@@ -253,16 +253,16 @@ class OuterIterator {
                     }
                     if (j == this._joins.length) {
                         scope.joined.push(scope.converted[i])
-                        trampoline.push(() => join(i + 1, 0))
+                        trampoline.sync(() => join(i + 1, 0))
                     } else {
                         const { name, using } = this._joins[j]
                         const key = using(scope.converted[i].join)
                         this._snapshot._get(name, trampoline, key, item => {
                             if (item == null) {
-                                trampoline.push(() => join(i + 1, 0))
+                                trampoline.sync(() => join(i + 1, 0))
                             } else {
                                 scope.converted[i].join.push(item.parts[1])
-                                trampoline.push(() => join(i, j + 1))
+                                trampoline.sync(() => join(i, j + 1))
                             }
                         })
                     }
@@ -403,7 +403,7 @@ class Mutator extends Snapshot {
                                     value: item.parts[1]
                                 }
                                 i++
-                                trampoline.push(() => get())
+                                trampoline.sync(() => get())
                             })
                         }
                     }
