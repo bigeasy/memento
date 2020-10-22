@@ -26,6 +26,20 @@ const ROLLBACK = Symbol('rollback')
 
 const riffle = require('riffle')
 
+function _find (comparator, array, key, low, high) {
+    let mid
+
+    while (low <= high) {
+        mid = low + ((high - low) >>> 1)
+        const compare = comparator(key, [ array[mid].key[0] ])
+        if (compare < 0) high = mid - 1
+        else if (compare > 0) low = mid + 1
+        else return { index: mid, found: true }
+    }
+
+    return { index: low, found: false }
+}
+
 function find (comparator, array, key, low, high) {
     let mid
 
@@ -46,7 +60,7 @@ class InnerIterator {
         this._series = outer._mutation.series
         this._compare = outer._mutation.amalgamator._comparator.stage
         this._items = items == null ? null : { array: items, index: 0 }
-        this._direction = this._outer._direction == 'reverse' ? -1 : 1
+        this._direction = this._outer._options.direction == 'reverse' ? -1 : 1
     }
 
     [Symbol.iterator] () {
@@ -54,13 +68,13 @@ class InnerIterator {
     }
 
     get reversed () {
-        return this._outer._direction == 'reverse'
+        return this._outer._options.direction == 'reverse'
     }
 
     set reversed (value) {
         const direction = value ? 'reverse' : 'forward'
-        if (direction != this._outer._direction) {
-            this._outer._direction = direction
+        if (direction != this._outer._options.direction) {
+            this._outer._options.direction = direction
             this._outer._series = this._series = 0
             this._outer._done = false
         }
@@ -108,11 +122,12 @@ class InnerIterator {
                     candidates.push(this._items)
                 }
             }
+            const { key } = this._outer._options
             const array = this._outer._mutation.appends[0]
             const comparator = this._outer._mutation.amalgamator._comparator.stage
-            let { index, found } = this._outer._previous.key == null
+            let { index, found } = key == null
                 ? { index: this._direction == 1 ? 0 : array.length, found: false }
-                : find(comparator, array, this._outer._previous.key, 0, array.length - 1)
+                : _find(comparator, array, [ key ], 0, array.length - 1)
             if (found || this._direction == -1) {
                 index += this._direction
             }
@@ -130,8 +145,10 @@ class InnerIterator {
             // We always increment the index because Strata iterators return the
             // values reversed but we search our in-memory stage each time we
             // descend.
-            this._outer._previous = candidate.array[candidate.index++]
-            const result = this._outer._filter(this._outer._previous)
+            const item = candidate.array[candidate.index++]
+            this._outer._options.key = item.key[0]
+            this._outer._options.inclusive = false
+            const result = this._outer._filter(item)
             if (result != null) {
                 return result
             }
@@ -196,9 +213,9 @@ class OuterIterator {
         }
     }) {
         this._snapshot = snapshot
-        this._transaction = transaction
-        this._direction = direction
-        this._previous = { key }
+        this._options = {
+            direction, inclusive, key, transaction
+        }
         this._mutation = mutation
         this._converter = converter
         this._series = 0
@@ -224,10 +241,7 @@ class OuterIterator {
         const {
             _mutation: { amalgamator },
             _mutation: { appends },
-            _transaction: transaction,
-            _direction: direction,
-            _previous: { key },
-            _inclusive: inclusive
+            _options: { direction, inclusive, key, transaction },
         } = this
         const additional = []
         if (appends.length == 2) {

@@ -315,7 +315,7 @@ require('proof')(17, async okay => {
                     presidents.reversed = true
                 }
             }
-            okay(gathered, expected.names.concat(expected.names.slice(0).reverse()), 'insert and interate many forward')
+            okay(gathered, expected.names.concat(expected.names.slice(0).reverse().slice(1)), 'insert and interate many forward')
         })
 
         try {
