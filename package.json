@@ -31,7 +31,7 @@
                             "keyify":                       "^2.0.4",
                             "rescue":                       "7.0.0-alpha.1",
                             "riffle":                       "2.0.0-alpha.37",
-                            "skip":                         "0.1.0"
+                            "skip":                         "0.1.1"
     },
     "devDependencies":
     {
