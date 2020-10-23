@@ -260,9 +260,9 @@ class OuterIterator {
             const { snapshot } = this
             for (let i = 0; i < this.joins.length; i++) {
                 const { name } = this.joins[0]
-                const hit = snapshot._hit(name, join.keys[i + 1])
+                const hit = snapshot._hit(name, join.keys[i])
                 if (hit != null) {
-                    joins.values[i + 1] = hit.method == 'remove' ? null : hit.parts[1]
+                    join.values[i + 1] = hit.method == 'remove' ? null : hit.parts[1]
                 }
                 if (this.joins[i].inner && join.values[i + 1] == null) {
                     return null
@@ -740,7 +740,7 @@ class Memento {
         this.destructible = options.destructible
         this._destructible = null
         this._stores = {}
-        this._cache = new Cache
+        this.cache = new Cache
         this._versions = { '0': true }
         this.directory = options.directory
         this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
@@ -827,7 +827,7 @@ class Memento {
         }
         memento._commits = new Strata(memento._destructible.commits.durable('strata'), {
             directory: path.resolve(memento.directory, 'commits'),
-            cache: memento._cache,
+            cache: memento.cache,
             comparator: (left, right) => left - right,
             serializer: 'json'
         })
@@ -959,7 +959,7 @@ class Memento {
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,
             directory: path.join(directory, 'store'),
-            cache: this._cache,
+            cache: this.cache,
             key: {
                 extract: extractor,
                 compare: comparator,
@@ -1041,7 +1041,7 @@ class Memento {
         const amalgamator = new Amalgamator(destructible, {
             locker: this._locker,
             directory: path.join(directory, 'store'),
-            cache: this._cache,
+            cache: this.cache,
             key: {
                 compare: comparator,
                 serialize: function (key) {

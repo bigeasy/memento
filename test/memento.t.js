@@ -1,4 +1,4 @@
-require('proof')(19, async okay => {
+require('proof')(20, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -311,6 +311,9 @@ require('proof')(19, async okay => {
             okay(gathered, expected.concat(expected.slice(0).reverse().slice(1)), 'iterator reversal')
 
             gathered.length = 0
+            // TODO Errors!
+            // memento.cache.purge(0)
+            // console.log(memento.cache.heft)
             for await (const presidents of mutator.forward([ 'president', 'name' ])) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
@@ -342,11 +345,27 @@ require('proof')(19, async okay => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
             })
-            okay(gathered, expected, 'inner join')
+            okay(gathered, expected, 'inner join stored')
             mutator.set('president', presidents[16])
+            mutator.set('president', presidents[17])
             gathered.length = 0
             select = mutator.forward('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
+                memento.cache.purge(0)
+                for (const [ president, state ] of items) {
+                    gathered.push([ president.lastName, state.name ])
+                }
+            }
+            expected = presidents.slice(0, 18).map(president => {
+                const name = states.filter(state => state.code == president.state).pop().name
+                return [ president.lastName,  name ]
+            })
+            okay(gathered, expected, 'inner join appened records')
+            mutator.set('state', { code: 'OH', name: 'Ohio 2' })
+            gathered.length = 0
+            select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            for await (const items of select) {
+                memento.cache.purge(0)
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
                 }
@@ -354,8 +373,8 @@ require('proof')(19, async okay => {
             expected = presidents.slice(0, 17).map(president => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
-            })
-            okay(gathered, expected, 'inner join')
+            }).concat([ [ 'Grant', 'Ohio 2' ] ])
+            okay(gathered, expected, 'inner join target changed')
         })
 
         await memento.close()
