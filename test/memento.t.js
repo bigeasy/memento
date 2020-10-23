@@ -1,4 +1,4 @@
-require('proof')(18, async okay => {
+require('proof')(19, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -332,13 +332,26 @@ require('proof')(18, async okay => {
 
         await memento.mutator(async mutator => {
             const gathered = []
-            const select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            let select = mutator.forward('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
                 }
             }
-            const expected = presidents.slice(0, 16).map(president => {
+            let expected = presidents.slice(0, 16).map(president => {
+                const name = states.filter(state => state.code == president.state).pop().name
+                return [ president.lastName,  name ]
+            })
+            okay(gathered, expected, 'inner join')
+            mutator.set('president', presidents[16])
+            gathered.length = 0
+            select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            for await (const items of select) {
+                for (const [ president, state ] of items) {
+                    gathered.push([ president.lastName, state.name ])
+                }
+            }
+            expected = presidents.slice(0, 17).map(president => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
             })

@@ -41,7 +41,7 @@ function find (comparator, array, key, low, high) {
 }
 
 class InnerIterator {
-    constructor (outer, items) {
+    constructor (outer) {
         this._outer = outer
         this._series = outer.mutation.series
         this._compare = outer.mutation.amalgamator._comparator.stage
@@ -79,57 +79,59 @@ class ReOuterIterator {
     }
 }
 
-// New problem, for joins. We need to do the lookup of the join during the async
-// part, but if we are a mutator we have in-memory records. We look those up in
-// the sync part. If we get one, we now need to do the join synchronously.
+// When we join in a snapshot, we can easily use the trampoline `get` to do our
+// join in the outer iterator and return an array of joined values.
 
-// Well, here's a think for you. We can do the join asynchronously first, for
-// the records we have, then we can continue to join in OuterIterator doing a
-// tree descent with a trampoline, but if we miss, if `trampoline.seek()` is
-// true, we just exit early. If we're looking up state names, for example, the
-// cache is probably hot. If we've updated a record without changing the lookup
-// keys, the cache is probably hot. The problem is that Strata will raise an
-// exception and that will end up being an unhandled rejection. Oh, no problem,
-// we just register a swallow it catch handler.
+// When we join in a mutator we have two problems. The user may perform a `set`
+// or `unset` of a joined item changing the join value. We do a lookup against
+// stored values for each of the entries we will encounter in the in-memory
+// array in the next synchronous iterator. That will be a range determined by
+// the last key used and the max value of the array returned from storage. We
+// look up the values and put them in a map indexed by the insert order. We use
+// a map because we don't have any other place to put it, the in memory stage is
+// common to all iterators across all mutations.
 
-// Which makes me think that it would be nice to do a pre-merge. To scan ahead
-// into the append on deck to heat the cache, or maybe to create a lookup map,
-// stopping where we'd stop in the inner iterator.
+// When we visit that item we check the map for the join values extracted from
+// storage and then we check in memory stage for each value which is
+// a synchornous action. The key is that we do it right at the time we're
+// returning the join from the inner iterator.
 
-// We actually can do this this synchronous peek if we update Trampoline to
-// invoke a function on `shift`. Looks as though the one, primary use in Strata
-// is an `async` function I call immediately anyway.
+// Note that we'll use the ordinary get to look up the join value. This will
+// perform an lookup against the in memory stage of the joined store first, then
+// a possibly async lookup against the amalgamator of the joined store. We'll
+// duplicate the in memory lookup in the inner iterator. This is fine since the
+// lookup on the in memory store is a synchronous operation and therefore
+// cheaper than an async operation if the value is in the in memory store.
 
-// I'm assuming that I can detect a miss by virtue of a null value, but that
-// wouldn't work for outer joins. I'd have to map in-memory insert order to any
-// looked up joins.
+// Worse, the user may perform a set or unset of a value into the collection we're
+// iterating. This will be a new entry and we won't have a value for its insert
+// index in your join map. We will not have done the trampoline join to lookup
+// the stored value for that new record and we need an `async` function in which
+// to run the trampoline.
 
-// Uh, oh, we also have to deal with changes to the value we looked up. The user
-// can `set` or `unset` values in the joined fields, invalidating a join entry.
+// What we do is we look up the value with a trampoline, but we do not run the
+// trampoline. If the values are in the in memory stage of the joined store or
+// are hot in the cache of the amalgamator of the joined store, our get will
+// run synchronously and we can return the result.
 
-// Thus, the `_filter` function has to check the join. It would be so much
-// easier to just trash everything if there is any mutation what-so-ever and
-// just let joins be slow if there are updates.
+// If our get does not run synchronosly, we'll know. When we call the trampoline
+// seek we will get a true value and that means we have an async operation in
+// the trampoline, so we return done for the inner iterator. When the outer
+// iterator is called again, we'll check seek on the same trampoline and run it,
+// then return a new inner iterator based on the current state of the iteration
+// machine. So, the trampoline call should endeavor to simply put the join into
+// the map and if successful we just run the filter again.
 
-// But, maybe there is a more elegant cache. Maybe we can invalidate the record
-// when we update, check to see if the previous entry has the same key, mark it
-// defunct and do that while we're already there, to clear out a join entry.
-
-// Or maybe perform the join lookup according to what is stored, then perform
-// the memory lookup in `_filter`. It needs to be done, so do it at the last
-// minute. Which means keeping around failed joins and trying again the moment
-// it is requested.
-
-// You know, in memory you don't have to keep the chnages. You can overwrite.
-
-// Okay, so resolve any overwrites last.
+// We'll start with the problem of doing a join against kkk
+// To do a join normally, we take the array we've created and add values to the
+// join array in each object in the array. We return the value or skip it
 
 //
 class OuterIterator {
     constructor ({
         snapshot, mutation, direction, key, inclusive, converter, joins = []
     }) {
-        this._snapshot = snapshot
+        this.snapshot = snapshot
         this.key = key
         this.direction = direction
         this.inclusive = inclusive
@@ -139,6 +141,8 @@ class OuterIterator {
         this.inclusive = inclusive
         this.done = false
         this.joins = joins
+        this.comparator = mutation.amalgamator._comparator.stage
+        this.trampoline = new Trampoline
     }
 
     [Symbol.asyncIterator] () {
@@ -147,7 +151,7 @@ class OuterIterator {
 
     _search () {
         const {
-            _snapshot: { _transaction: transaction },
+            snapshot: { _transaction: transaction },
             mutation: { amalgamator, appends },
             inclusive, key, direction
         } = this
@@ -156,16 +160,6 @@ class OuterIterator {
             additional.push(advance.forward([ appends[1] ]))
         }
         this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
-    }
-
-    filter (candidate) {
-        if (this.joins.length != 0) {
-            if (candidate.join == null) {
-                return null
-            }
-            return { done: false, value: candidate.join }
-        }
-        return { done: false, value: candidate.value }
     }
 
     // The problem with advancing over our in-memory or file backed stage is
@@ -235,16 +229,74 @@ class OuterIterator {
             // values reversed but we search our in-memory stage each time we
             // descend.
             const item = candidate.array[candidate.index++]
-            outer.key = item.key[0]
-            outer.inclusive = false
-            const result = outer.filter(item)
+            const result = this._filter(item)
+            if (result == null || !result.done) {
+                outer.key = item.key[0]
+                outer.inclusive = false
+            }
             if (result != null) {
                 return result
             }
         }
     }
 
+    _filter (item) {
+        if (this.joins.length != 0) {
+            let join = item.join
+            if (join == null) {
+                join = this.joined.get(item.key[2])
+                if (join == null) {
+                    this._join(item, (values, keys) => {
+                        this.joined.set(item.key[2], { values, keys })
+                    })
+                    if (this.trampoline.seek()) {
+                        return { done: true, value: null }
+                    }
+                    return this._filter(item)
+                } else {
+                    join.values[0] = item.value
+                }
+            }
+            const { snapshot } = this
+            for (let i = 0; i < this.joins.length; i++) {
+                const { name } = this.joins[0]
+                const hit = snapshot._hit(name, join.keys[i + 1])
+                if (hit != null) {
+                    joins.values[i + 1] = hit.method == 'remove' ? null : hit.parts[1]
+                }
+                if (this.joins[i].inner && join.values[i + 1] == null) {
+                    return null
+                }
+            }
+            return { done: false, value: join.values }
+        } else {
+            return { done: false, value: item.value }
+        }
+    }
+
+    _join (value, next) {
+        const values = [ value ], keys = [], { trampoline } = this
+        const join = (i) => {
+            if (i == this.joins.length) {
+                trampoline.sync(() => next(values, keys))
+            } else {
+                const { name, using } = this.joins[i]
+                const key = using(values)
+                keys.push(key)
+                this.snapshot._get(name, trampoline, key, item => {
+                    values.push(item == null ? null : item.parts[1])
+                    trampoline.sync(() => join(i + 1))
+                })
+            }
+        }
+        join(0)
+    }
+
     async outer () {
+        const { trampoline } = this, scope = { items: null, converted: null }
+        if (trampoline.seek()) {
+            return { done: false, value: new InnerIterator(this) }
+        }
         if (this.done) {
             return { done: true, value: null }
         }
@@ -252,7 +304,6 @@ class OuterIterator {
             this.series = this.mutation.series
             this._search()
         }
-        const trampoline = new Trampoline, scope = { items: null, converted: null, joined: [] }
         this._iterator.next(trampoline, items => scope.items = items)
         while (trampoline.seek()) {
             await trampoline.shift()
@@ -264,25 +315,10 @@ class OuterIterator {
             }
         }
         if (scope.converted != null && this.joins.length != 0) {
-            const join = (trampoline, entry, record, i, next) => {
-                if (i == 0) {
-                    record.push(entry.value)
-                }
-                if (i == this.joins.length) {
-                    trampoline.sync(() => next(record))
-                } else {
-                    const { name, using } = this.joins[i]
-                    const key = using(record)
-                    this._snapshot._get(name, trampoline, key, item => {
-                        record.push(item == null ? null : item.parts[1])
-                        trampoline.sync(() => join(trampoline, entry, record, i + 1, next))
-                    })
-                }
-            }
-            const traverse = (input, i, j) => {
+            const traverse = (input, i) => {
                 if (i < input.length) {
-                    join(trampoline, input[i], [], 0, joined => {
-                        input[i].join = joined
+                    this._join(input[i].value, (values, keys) => {
+                        input[i].join = { values, keys }
                         trampoline.sync(() => traverse(input, i + 1))
                     })
                 }
@@ -292,8 +328,39 @@ class OuterIterator {
                 await trampoline.shift()
             }
         }
+        this.joined = new Map
+        if (this.joins.length != 0 && this.mutation.appends[0].length != 0) {
+            const { mutation: { appends: [ array ] }, key, comparator } = this
+            const start = function () {
+                if (key == null) {
+                    return 0
+                }
+                const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
+                return found ? index + 1 : index
+            } ()
+            const end = function () {
+                if (scope.converted != null) {
+                    const key = scope.converted[scope.converted.length - 1].key[0]
+                    const { index, found } =  find(comparator, array, [ key ], 0, array.length - 1)
+                    return found ? index + 1 : index
+                }
+                return array.length
+            } ()
+            const traverse = (i) => {
+                if (i < end) {
+                    this._join(array[i].value, (values, keys) => {
+                        this.joined.set(array[i].key[2], { values, keys })
+                        trampoline.sync(() => traverse(i + 1))
+                    })
+                }
+            }
+            traverse(0)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
         this._items = scope.converted == null ? null : { array: scope.converted, index: 0 }
-        return { done: false, value: new InnerIterator(this, scope.converted) }
+        return { done: false, value: new InnerIterator(this) }
     }
 }
 
@@ -304,7 +371,12 @@ class IteratorBuilder {
     }
 
     join (name, using) {
-        this._options.joins.push({ name, using })
+        this._options.joins.push({ name, using, inner: true })
+        return this
+    }
+
+    outer (name, using) {
+        this._options.joins.push({ name, using, inner: false })
         return this
     }
 
@@ -476,12 +548,24 @@ class Mutator extends Snapshot {
         return this._iterator(name, vargs, 'reverse')
     }
 
+    _hit (name, key) {
+        const mutation = this._mutation(name)
+        const comparator = mutation.amalgamator._comparator.stage
+        for (const array of mutation.appends) {
+            const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
+            if (found) {
+                return array[index]
+            }
+        }
+        return null
+    }
+
     _get (name, trampoline, key, consume) {
         const mutation = this._mutation(name)
         // TODO Expose comparators in Amalgamate.
-        const comparators = mutation.amalgamator._comparator
+        const comparator = mutation.amalgamator._comparator.stage
         for (const array of mutation.appends) {
-            const { index, found } = find(comparators.stage, array, [ key ], 0, array.length - 1)
+            const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
             if (found) {
                 const item = array[index]
                 consume(item.method == 'remove' ? null : item)
