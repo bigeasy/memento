@@ -1044,6 +1044,7 @@ class Memento {
             cache: this.cache,
             key: {
                 compare: comparator,
+                extract: parts => parts[0],
                 serialize: function (key) {
                     return [ Buffer.from(JSON.stringify(key)) ]
                 },

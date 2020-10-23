@@ -311,9 +311,7 @@ require('proof')(20, async okay => {
             okay(gathered, expected.concat(expected.slice(0).reverse().slice(1)), 'iterator reversal')
 
             gathered.length = 0
-            // TODO Errors!
-            // memento.cache.purge(0)
-            // console.log(memento.cache.heft)
+            memento.cache.purge(0)
             for await (const presidents of mutator.forward([ 'president', 'name' ])) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
