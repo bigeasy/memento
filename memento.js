@@ -41,10 +41,8 @@ function find (comparator, array, key, low, high) {
 }
 
 class InnerIterator {
-    constructor (outer) {
-        this._outer = outer
-        this._series = outer.mutation.series
-        this._compare = outer.mutation.amalgamator._comparator.stage
+    constructor (iterator) {
+        this._iterator = iterator
     }
 
     [Symbol.iterator] () {
@@ -52,24 +50,19 @@ class InnerIterator {
     }
 
     get reversed () {
-        return this._outer.direction == 'reverse'
+        return this._iterator.reversed
     }
 
     set reversed (value) {
-        const direction = value ? 'reverse' : 'forward'
-        if (direction != this._outer.direction) {
-            this._outer.direction = direction
-            this._outer.series = this._series = 0
-            this._outer.done = false
-        }
+        this._iterator.reversed = value
     }
 
     next () {
-        return this._outer.inner()
+        return this._iterator.inner()
     }
 }
 
-class ReOuterIterator {
+class OuterIterator {
     constructor (iterator) {
         this._iterator = iterator
     }
@@ -127,7 +120,7 @@ class ReOuterIterator {
 // join array in each object in the array. We return the value or skip it
 
 //
-class OuterIterator {
+class MutatorIterator {
     constructor ({
         snapshot, mutation, direction, key, inclusive, converter, joins = []
     }) {
@@ -146,7 +139,7 @@ class OuterIterator {
     }
 
     [Symbol.asyncIterator] () {
-        return new ReOuterIterator(this)
+        return new OuterIterator(this)
     }
 
     _search () {
@@ -160,6 +153,19 @@ class OuterIterator {
             additional.push(advance.forward([ appends[1] ]))
         }
         this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
+    }
+
+    get reversed () {
+        return this._iterator.direction == 'reverse'
+    }
+
+    set reversed (value) {
+        const direction = value ? 'reverse' : 'forward'
+        if (direction != this.direction) {
+            this.direction = direction
+            this.series = 0
+            this.done = false
+        }
     }
 
     // The problem with advancing over our in-memory or file backed stage is
@@ -383,7 +389,7 @@ class IteratorBuilder {
     [Symbol.asyncIterator] () {
         const options = this._options
         this._options = null
-        return new ReOuterIterator(new OuterIterator(options))
+        return new OuterIterator(new MutatorIterator(options))
     }
 }
 
