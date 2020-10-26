@@ -29,9 +29,9 @@
                             "interrupt":                    "11.0.0-alpha.1",
                             "journalist":                   "0.1.7",
                             "keyify":                       "^2.0.4",
+                            "reciprocate":                  "0.0.1",
                             "rescue":                       "7.0.0-alpha.1",
-                            "riffle":                       "2.0.0-alpha.38",
-                            "skip":                         "0.1.1"
+                            "riffle":                       "2.0.0-alpha.38"
     },
     "devDependencies":
     {
