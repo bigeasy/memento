@@ -86,7 +86,7 @@ class AmalgamatorIterator {
         this.done = false
         this.joins = joins
         this.joined = null
-        this.comparator = mutation.amalgamator._comparator.stage
+        this.comparator = mutation.store.amalgamator._comparator.stage
         this.trampoline = new Trampoline
     }
 
@@ -97,7 +97,7 @@ class AmalgamatorIterator {
     _search () {
         const {
             snapshot: { _transaction: transaction },
-            mutation: { amalgamator, appends },
+            mutation: { store: { amalgamator }, appends },
             inclusive, key, direction
         } = this
         const additional = []
@@ -318,7 +318,7 @@ class SnapshotIterator extends AmalgamatorIterator {
 class MutatorIterator extends AmalgamatorIterator {
     constructor (options) {
         super(options)
-        this.comparator = options.mutation.amalgamator._comparator.stage
+        this.comparator = options.mutation.store.amalgamator._comparator.stage
         this.trampoline = new Trampoline
     }
 
@@ -367,7 +367,7 @@ class MutatorIterator extends AmalgamatorIterator {
             }
             const options = outer._options
             const array = outer.mutation.appends[0]
-            const comparator = outer.mutation.amalgamator._comparator.stage
+            const comparator = outer.mutation.store.amalgamator._comparator.stage
             let { index, found } = outer.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
                 : find(comparator, array, [ outer.key ], 0, array.length - 1)
@@ -502,8 +502,7 @@ class Snapshot extends Transaction {
             const mutation = {
                 series: 1,
                 appends: [[]],
-                amalgamator: this._memento._stores[name[0]].indices[name[1]].amalgamator,
-                index: this._memento._stores[name[0]].indices[name[1]],
+                store: this._memento._stores[name[0]].indices[name[1]],
                 qualifier: name,
             }
             return new IteratorBuilder({
@@ -520,7 +519,7 @@ class Snapshot extends Transaction {
                         if (i == items.length) {
                             consume(converted)
                         } else {
-                            const key = items[i].key[0].slice(mutation.index.keyLength)
+                            const key = items[i].key[0].slice(mutation.store.keyLength)
                             this._get(name[0], trampoline, key, item => {
                                 assert(item != null)
                                 converted[i] = {
@@ -541,7 +540,7 @@ class Snapshot extends Transaction {
             mutation: {
                 series: 1,
                 appends: [[]],
-                amalgamator: this._memento._stores[name].amalgamator,
+                store: this._memento._stores[name],
                 qualifier: name,
             },
             direction: direction,
@@ -596,8 +595,7 @@ class Mutator extends Transaction {
                 indices[index] = {
                     series: 1,
                     appends: [[]],
-                    index: store.indices[index],
-                    amalgamator: store.indices[index].amalgamator,
+                    store: store.indices[index],
                     qualifier: [ name, index ]
                 }
             }
@@ -606,8 +604,6 @@ class Mutator extends Transaction {
             return this._mutations[name] = {
                 series: 1,
                 store: store,
-                amalgamator: store.amalgamator,
-                index: null,
                 appends: [[]],
                 qualifier: [ name ],
                 indices: indices
@@ -619,7 +615,7 @@ class Mutator extends Transaction {
     // TODO Okay, so how do we say that any iterators should recalculate with a
     // new `Amalgamate.iterator()`? Use a count.
     async _merge (mutation) {
-        await mutation.amalgamator.merge(this._transaction, mutation.appends[1])
+        await mutation.store.amalgamator.merge(this._transaction, mutation.appends[1])
         mutation.series++
         mutation.appends.pop()
     }
@@ -647,7 +643,7 @@ class Mutator extends Transaction {
             version: compound[1],
             order: compound[2]
         }, record ]
-        const comparator = mutation.amalgamator._comparator.stage
+        const comparator = mutation.store.amalgamator._comparator.stage
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
         if (found) {
             array[index] = { key: compound, parts, value, join: null }
@@ -659,11 +655,11 @@ class Mutator extends Transaction {
 
     set (name, record) {
         const mutation = this._mutation(name)
-        const key = mutation.amalgamator.strata.extract([ record ])
+        const key = mutation.store.amalgamator.strata.extract([ record ])
         this._append(mutation, 'insert', key, record, record)
         for (const name in mutation.indices) {
             const index = mutation.indices[name]
-            const key = index.index.extractor([ record ])
+            const key = index.store.extractor([ record ])
             this._append(index, 'insert', key, key, record)
         }
     }
@@ -696,7 +692,7 @@ class Mutator extends Transaction {
                         if (i == items.length) {
                             consume(converted)
                         } else {
-                            const key = items[i].key[0].slice(mutation.index.keyLength)
+                            const key = items[i].key[0].slice(mutation.store.keyLength)
                             this._get(name[0], trampoline, key, item => {
                                 assert(item != null)
                                 converted[i] = {
@@ -736,7 +732,7 @@ class Mutator extends Transaction {
 
     _hit (name, key) {
         const mutation = this._mutation(name)
-        const comparator = mutation.amalgamator._comparator.stage
+        const comparator = mutation.store.amalgamator._comparator.stage
         for (const array of mutation.appends) {
             const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
             if (found) {
@@ -749,7 +745,7 @@ class Mutator extends Transaction {
     _get (name, trampoline, key, consume) {
         const mutation = this._mutation(name)
         // TODO Expose comparators in Amalgamate.
-        const comparator = mutation.amalgamator._comparator.stage
+        const comparator = mutation.store.amalgamator._comparator.stage
         for (const array of mutation.appends) {
             const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
             if (found) {
@@ -758,7 +754,7 @@ class Mutator extends Transaction {
                 return
             }
         }
-        mutation.amalgamator.get(this._transaction, trampoline, key, consume)
+        mutation.store.amalgamator.get(this._transaction, trampoline, key, consume)
     }
 
     async commit () {
@@ -1093,13 +1089,6 @@ class Memento {
             }
         }
         await Strata.flush(writes)
-    }
-
-    get _version () {
-        throw new Error
-    }
-
-    async _open (upgrade, version) {
     }
 
     async _store (versions, name, directory, create = false) {
