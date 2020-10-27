@@ -241,7 +241,7 @@ class SnapshotIterator extends AmalgamatorIterator {
             // We always increment the index because Strata iterators return the
             // values reversed but we search our in-memory stage each time we
             // descend.
-            const item = this._items[this._index++]
+            const item = this._items.array[this._items.index++]
             const result = this._filter(item)
             if (result == null || !result.done) {
                 this.key = item.key[0]
@@ -476,10 +476,25 @@ class IteratorBuilder {
     }
 }
 
-class Snapshot {
-    constructor (memento) {
+class Transaction {
+    constructor (memento, transaction) {
         this._memento = memento
-        this._transaction = memento._locker.snapshot()
+        this._transaction = transaction
+    }
+
+    async get (name, key) {
+        const trampoline = new Trampoline, scope = { item: null }
+        this._get(name, trampoline, key, item => scope.item = item)
+        while (trampoline.seek()) {
+            await trampoline.shift()
+        }
+        return scope.item == null ? null : scope.item.parts[1]
+    }
+}
+
+class Snapshot extends Transaction {
+    constructor (memento) {
+        super(memento, memento._locker.snapshot())
     }
 
     _iterator (name, vargs, direction) {
@@ -488,6 +503,7 @@ class Snapshot {
                 series: 1,
                 appends: [[]],
                 amalgamator: this._memento._stores[name[0]].indices[name[1]].amalgamator,
+                index: this._memento._stores[name[0]].indices[name[1]],
                 qualifier: name,
             }
             return new IteratorBuilder({
@@ -539,6 +555,13 @@ class Snapshot {
         })
     }
 
+    _get (name, trampoline, key, consume) {
+        const amalgamator = Array.isArray(name)
+            ? this._memento._stores[name[0]].indices[name[1]].amalgamator
+            : this._memento._stores[name].amalgamator
+        amalgamator.get(this._transaction, trampoline, key, consume)
+    }
+
     forward (name, ...vargs) {
         return this._iterator(name, vargs, 'forward')
     }
@@ -552,13 +575,12 @@ class Snapshot {
     }
 }
 
-class Mutator {
+class Mutator extends Transaction {
     static instance = 0
 
     constructor (memento) {
-        this._memento = memento
+        super(memento, memento._locker.mutator())
         this._destructible = memento._destructible.mutators.ephemeral([ 'mutation', Mutator.instance++ ])
-        this._transaction = memento._locker.mutator()
         this._destructible.increment()
         this._mutations = {}
         this._index = 0
@@ -579,10 +601,13 @@ class Mutator {
                     qualifier: [ name, index ]
                 }
             }
+            // TODO No, get them as you need them, the index and such, do not
+            // stuff them here.
             return this._mutations[name] = {
                 series: 1,
                 store: store,
                 amalgamator: store.amalgamator,
+                index: null,
                 appends: [[]],
                 qualifier: [ name ],
                 indices: indices
@@ -734,15 +759,6 @@ class Mutator {
             }
         }
         mutation.amalgamator.get(this._transaction, trampoline, key, consume)
-    }
-
-    async get (name, key) {
-        const trampoline = new Trampoline, scope = { item: null }
-        this._get(name, trampoline, key, item => scope.item = item)
-        while (trampoline.seek()) {
-            await trampoline.shift()
-        }
-        return scope.item == null ? null : scope.item.parts[1]
     }
 
     async commit () {

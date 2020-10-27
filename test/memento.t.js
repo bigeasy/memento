@@ -1,4 +1,4 @@
-require('proof')(21, async okay => {
+require('proof')(27, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -194,18 +194,6 @@ require('proof')(21, async okay => {
             okay(test, [ 'error' ], 'rethrow error')
         }
 
-        function createMutex () {
-            const mutex = {
-                enter: { promise: null, resolve: null },
-                exit: { promise: null, resolve: null }
-            }
-            mutex.enter.promise = new Promise(resolve => mutex.enter.resolve = resolve)
-            mutex.exit.promise = new Promise(resolve => mutex.exit.resolve = resolve)
-            return mutex
-        }
-
-        let mutex = createMutex()
-
         const latch = { promise: null, resolve: null }
         latch.promise = new Promise(resolve => latch.resolve = resolve)
 
@@ -219,13 +207,25 @@ require('proof')(21, async okay => {
                 }
             }
 
-            okay(gathered, [], 'snapshot empty')
+            okay(gathered, [], 'snapshot store empty')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+
+            okay(gathered, [], 'snapshot index empty')
+
+            okay(await snapshot.get('president', [ 1 ]), null, 'get store empty')
+            okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), null, 'get index empty')
         })
 
         await memento.mutator(async function (mutator) {
-
             mutator.set('president', insert.shift())
 
+            // TODO Get index.
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get')
 
             const gathered = []
@@ -267,6 +267,30 @@ require('proof')(21, async okay => {
 
         latch.resolve()
         await snapshot
+
+        await memento.snapshot(async snapshot => {
+            okay(await snapshot.get('president', [ 1 ]), presidents[0], 'get store snapshot')
+            // TODO
+            // okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
+
+            const gathered = []
+            for await (const presidents of snapshot.forward('president')) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'forward president snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+
+            okay(gathered, presidents.slice(0, 1), 'forward index snapshot')
+        })
 
         await memento.mutator(async function (mutator) {
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get staged')
