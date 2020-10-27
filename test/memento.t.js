@@ -1,4 +1,4 @@
-require('proof')(20, async okay => {
+require('proof')(21, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -194,6 +194,34 @@ require('proof')(20, async okay => {
             okay(test, [ 'error' ], 'rethrow error')
         }
 
+        function createMutex () {
+            const mutex = {
+                enter: { promise: null, resolve: null },
+                exit: { promise: null, resolve: null }
+            }
+            mutex.enter.promise = new Promise(resolve => mutex.enter.resolve = resolve)
+            mutex.exit.promise = new Promise(resolve => mutex.exit.resolve = resolve)
+            return mutex
+        }
+
+        let mutex = createMutex()
+
+        const latch = { promise: null, resolve: null }
+        latch.promise = new Promise(resolve => latch.resolve = resolve)
+
+        let snapshot = memento.snapshot(async function (snapshot) {
+            await latch.promise
+
+            const gathered = []
+            for await (const presidents of snapshot.forward('president')) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+
+            okay(gathered, [], 'snapshot empty')
+        })
+
         await memento.mutator(async function (mutator) {
 
             mutator.set('president', insert.shift())
@@ -236,6 +264,9 @@ require('proof')(20, async okay => {
 
             okay(gathered, presidents.slice(0, 1), 'local index')
         })
+
+        latch.resolve()
+        await snapshot
 
         await memento.mutator(async function (mutator) {
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get staged')

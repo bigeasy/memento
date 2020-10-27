@@ -72,6 +72,201 @@ class OuterIterator {
     }
 }
 
+class AmalgamatorIterator {
+    constructor({
+        snapshot, mutation, direction, key, inclusive, converter, joins = []
+    }) {
+        this.snapshot = snapshot
+        this.key = key
+        this.direction = direction
+        this.inclusive = inclusive
+        this.mutation = mutation
+        this.converter = converter
+        this.inclusive = inclusive
+        this.done = false
+        this.joins = joins
+        this.joined = null
+        this.comparator = mutation.amalgamator._comparator.stage
+        this.trampoline = new Trampoline
+    }
+
+    [Symbol.asyncIterator] () {
+        return new OuterIterator(this)
+    }
+
+    _search () {
+        const {
+            snapshot: { _transaction: transaction },
+            mutation: { amalgamator, appends },
+            inclusive, key, direction
+        } = this
+        const additional = []
+        if (appends.length == 2) {
+            additional.push(advance.forward([ appends[1] ]))
+        }
+        this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
+    }
+
+    get reversed () {
+        return this._iterator.direction == 'reverse'
+    }
+
+    set reversed (value) {
+        const direction = value ? 'reverse' : 'forward'
+        if (direction != this.direction) {
+            this.direction = direction
+            this.series = 0
+            this.done = false
+        }
+    }
+
+    async outer () {
+        const { trampoline } = this, scope = { items: null, converted: null }
+        if (trampoline.seek()) {
+            return { done: false, value: new InnerIterator(this) }
+        }
+        if (this.done) {
+            return { done: true, value: null }
+        }
+        if (this.series != this.mutation.series) {
+            this.series = this.mutation.series
+            this._search()
+        }
+        this._iterator.next(trampoline, items => scope.items = items)
+        while (trampoline.seek()) {
+            await trampoline.shift()
+        }
+        if (scope.items != null) {
+            this.converter(trampoline, scope.items, converted => scope.converted = converted)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        if (scope.converted != null && this.joins.length != 0) {
+            const traverse = (input, i) => {
+                if (i < input.length) {
+                    this._join(input[i].value, (values, keys) => {
+                        input[i].join = { values, keys }
+                        trampoline.sync(() => traverse(input, i + 1))
+                    })
+                }
+            }
+            traverse(scope.converted, 0)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        this.joined = new Map
+        const { mutation: { appends: [ array ] } } = this
+        if (this.joins.length != 0 && array.length != 0) {
+            const { key, comparator } = this
+            const start = function () {
+                if (key == null) {
+                    return 0
+                }
+                const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
+                return found ? index + 1 : index
+            } ()
+            const end = function () {
+                if (scope.converted != null) {
+                    const key = scope.converted[scope.converted.length - 1].key[0]
+                    const { index, found } =  find(comparator, array, [ key ], 0, array.length - 1)
+                    return found ? index + 1 : index
+                }
+                return array.length
+            } ()
+            const traverse = (i) => {
+                if (i < end) {
+                    this._join(array[i].value, (values, keys) => {
+                        this.joined.set(array[i].key[2], { values, keys })
+                        trampoline.sync(() => traverse(i + 1))
+                    })
+                }
+            }
+            traverse(0)
+            while (trampoline.seek()) {
+                await trampoline.shift()
+            }
+        }
+        if (scope.converted == null) {
+            if (array.length == 0) {
+                this.done = true
+                return { done: true, value: null }
+            }
+            this._items = null
+        } else {
+            this._items = { array: scope.converted, index: 0 }
+        }
+        return { done: false, value: new InnerIterator(this) }
+    }
+}
+
+// DRY. Unless you really want to see what the code would look like without the
+// added complexity of the in-memory stage. It would look like this, but I
+// repeat myself.
+
+//
+class SnapshotIterator extends AmalgamatorIterator {
+    constructor (options) {
+        super(options)
+    }
+
+    [Symbol.asyncIterator] () {
+        return new OuterIterator(this)
+    }
+
+    get reversed () {
+        return this._iterator.direction == 'reverse'
+    }
+
+    set reversed (value) {
+        const direction = value ? 'reverse' : 'forward'
+        if (direction != this.direction) {
+            this.direction = direction
+            this.series = 0
+            this.done = false
+        }
+    }
+
+    inner () {
+        // TODO Here is the inner series check, so all we need is one for the
+        // outer iterator and we're good.
+        for (;;) {
+            if (this.mutation.series != this.series) {
+                return { done: true, value: null }
+            }
+            if (this._items.array.length == this._items.index) {
+                return { done: true, value: null }
+            }
+            // We always increment the index because Strata iterators return the
+            // values reversed but we search our in-memory stage each time we
+            // descend.
+            const item = this._items[this._index++]
+            const result = this._filter(item)
+            if (result == null || !result.done) {
+                this.key = item.key[0]
+                this.inclusive = false
+            }
+            if (result != null) {
+                return result
+            }
+        }
+    }
+
+    _filter (item) {
+        if (this.joins.length != 0) {
+            for (let i = 0; i < this.joins.length; i++) {
+                if (this.joins[i].inner && item.join.values[i + 1] == null) {
+                    return null
+                }
+            }
+            return { done: false, value: item.join.values }
+        } else {
+            return { done: false, value: item.value }
+        }
+    }
+}
+
 // When we join in a snapshot, we can easily use the trampoline `get` to do our
 // join in the outer iterator and return an array of joined values.
 
@@ -120,52 +315,11 @@ class OuterIterator {
 // join array in each object in the array. We return the value or skip it
 
 //
-class MutatorIterator {
-    constructor ({
-        snapshot, mutation, direction, key, inclusive, converter, joins = []
-    }) {
-        this.snapshot = snapshot
-        this.key = key
-        this.direction = direction
-        this.inclusive = inclusive
-        this.mutation = mutation
-        this.converter = converter
-        this.series = 0
-        this.inclusive = inclusive
-        this.done = false
-        this.joins = joins
-        this.comparator = mutation.amalgamator._comparator.stage
+class MutatorIterator extends AmalgamatorIterator {
+    constructor (options) {
+        super(options)
+        this.comparator = options.mutation.amalgamator._comparator.stage
         this.trampoline = new Trampoline
-    }
-
-    [Symbol.asyncIterator] () {
-        return new OuterIterator(this)
-    }
-
-    _search () {
-        const {
-            snapshot: { _transaction: transaction },
-            mutation: { amalgamator, appends },
-            inclusive, key, direction
-        } = this
-        const additional = []
-        if (appends.length == 2) {
-            additional.push(advance.forward([ appends[1] ]))
-        }
-        this._iterator = amalgamator.iterator(transaction, direction, key, inclusive, additional)
-    }
-
-    get reversed () {
-        return this._iterator.direction == 'reverse'
-    }
-
-    set reversed (value) {
-        const direction = value ? 'reverse' : 'forward'
-        if (direction != this.direction) {
-            this.direction = direction
-            this.series = 0
-            this.done = false
-        }
     }
 
     // The problem with advancing over our in-memory or file backed stage is
@@ -297,77 +451,6 @@ class MutatorIterator {
         }
         join(0)
     }
-
-    async outer () {
-        const { trampoline } = this, scope = { items: null, converted: null }
-        if (trampoline.seek()) {
-            return { done: false, value: new InnerIterator(this) }
-        }
-        if (this.done) {
-            return { done: true, value: null }
-        }
-        if (this.series != this.mutation.series) {
-            this.series = this.mutation.series
-            this._search()
-        }
-        this._iterator.next(trampoline, items => scope.items = items)
-        while (trampoline.seek()) {
-            await trampoline.shift()
-        }
-        if (scope.items != null) {
-            this.converter(trampoline, scope.items, converted => scope.converted = converted)
-            while (trampoline.seek()) {
-                await trampoline.shift()
-            }
-        }
-        if (scope.converted != null && this.joins.length != 0) {
-            const traverse = (input, i) => {
-                if (i < input.length) {
-                    this._join(input[i].value, (values, keys) => {
-                        input[i].join = { values, keys }
-                        trampoline.sync(() => traverse(input, i + 1))
-                    })
-                }
-            }
-            traverse(scope.converted, 0)
-            while (trampoline.seek()) {
-                await trampoline.shift()
-            }
-        }
-        this.joined = new Map
-        if (this.joins.length != 0 && this.mutation.appends[0].length != 0) {
-            const { mutation: { appends: [ array ] }, key, comparator } = this
-            const start = function () {
-                if (key == null) {
-                    return 0
-                }
-                const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
-                return found ? index + 1 : index
-            } ()
-            const end = function () {
-                if (scope.converted != null) {
-                    const key = scope.converted[scope.converted.length - 1].key[0]
-                    const { index, found } =  find(comparator, array, [ key ], 0, array.length - 1)
-                    return found ? index + 1 : index
-                }
-                return array.length
-            } ()
-            const traverse = (i) => {
-                if (i < end) {
-                    this._join(array[i].value, (values, keys) => {
-                        this.joined.set(array[i].key[2], { values, keys })
-                        trampoline.sync(() => traverse(i + 1))
-                    })
-                }
-            }
-            traverse(0)
-            while (trampoline.seek()) {
-                await trampoline.shift()
-            }
-        }
-        this._items = scope.converted == null ? null : { array: scope.converted, index: 0 }
-        return { done: false, value: new InnerIterator(this) }
-    }
 }
 
 class IteratorBuilder {
@@ -389,23 +472,93 @@ class IteratorBuilder {
     [Symbol.asyncIterator] () {
         const options = this._options
         this._options = null
-        return new OuterIterator(new MutatorIterator(options))
+        return new OuterIterator(new (options.Iterator)(options))
     }
 }
 
 class Snapshot {
-    constructor (memento, transaction) {
+    constructor (memento) {
         this._memento = memento
-        this._transaction = transaction
+        this._transaction = memento._locker.snapshot()
+    }
+
+    _iterator (name, vargs, direction) {
+        if (Array.isArray(name)) {
+            const mutation = {
+                series: 1,
+                appends: [[]],
+                amalgamator: this._memento._stores[name[0]].indices[name[1]].amalgamator,
+                qualifier: name,
+            }
+            return new IteratorBuilder({
+                Iterator: SnapshotIterator,
+                snapshot: this,
+                mutation: mutation,
+                direction: direction,
+                key: null,
+                incluslive: true,
+                converter: (trampoline, items, consume) => {
+                    const converted = []
+                    let i = 0
+                    const get = () => {
+                        if (i == items.length) {
+                            consume(converted)
+                        } else {
+                            const key = items[i].key[0].slice(mutation.index.keyLength)
+                            this._get(name[0], trampoline, key, item => {
+                                assert(item != null)
+                                converted[i] = {
+                                    key: items[i].key, value: item.parts[1], join: []
+                                }
+                                i++
+                                trampoline.sync(() => get())
+                            })
+                        }
+                    }
+                    get()
+                }
+            })
+        }
+        return new IteratorBuilder({
+            Iterator: SnapshotIterator,
+            snapshot: this,
+            mutation: {
+                series: 1,
+                appends: [[]],
+                amalgamator: this._memento._stores[name].amalgamator,
+                qualifier: name,
+            },
+            direction: direction,
+            key: null,
+            incluslive: true,
+            converter: (trampoline, items, consume) => {
+                consume(items.map(item => {
+                    return { key: item.key, value: item.parts[1], join: [] }
+                }))
+            }
+        })
+    }
+
+    forward (name, ...vargs) {
+        return this._iterator(name, vargs, 'forward')
+    }
+
+    reverse (name, ...vargs) {
+        return this._iterator(name, vargs, 'reverse')
+    }
+
+    release () {
+        this._memento._locker.release(this._transaction)
     }
 }
 
-class Mutator extends Snapshot {
+class Mutator {
     static instance = 0
 
     constructor (memento) {
-        super(memento, memento._locker.mutator())
+        this._memento = memento
         this._destructible = memento._destructible.mutators.ephemeral([ 'mutation', Mutator.instance++ ])
+        this._transaction = memento._locker.mutator()
         this._destructible.increment()
         this._mutations = {}
         this._index = 0
@@ -505,6 +658,7 @@ class Mutator extends Snapshot {
         if (Array.isArray(name)) {
             const mutation = this._mutation(name[0]).indices[name[1]]
             return new IteratorBuilder({
+                Iterator: MutatorIterator,
                 snapshot: this,
                 mutation: mutation,
                 direction: direction,
@@ -533,6 +687,7 @@ class Mutator extends Snapshot {
             })
         }
         return new IteratorBuilder({
+            Iterator: MutatorIterator,
             snapshot: this,
             mutation: this._mutation(name),
             direction: direction,
@@ -1089,6 +1244,15 @@ class Memento {
 
         store.indices[name] = {
             destructible, amalgamator, extractor, keyLength: key.comparisons.length
+        }
+    }
+
+    async snapshot (block) {
+        const snapshot = new Snapshot(this)
+        try {
+            await block(snapshot)
+        } finally {
+            snapshot.release()
         }
     }
 
