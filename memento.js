@@ -350,11 +350,8 @@ class MutatorIterator extends AmalgamatorIterator {
     //
     inner () {
         const direction = this.direction == 'reverse' ? -1 : 1
-        const outer = this
-        // TODO Here is the inner series check, so all we need is one for the
-        // outer iterator and we're good.
         for (;;) {
-            if (outer.mutation.series != this.series) {
+            if (this.mutation.series != this.series) {
                 return { done: true, value: null }
             }
             const candidates = []
@@ -365,12 +362,11 @@ class MutatorIterator extends AmalgamatorIterator {
                     candidates.push(this._items)
                 }
             }
-            const options = outer._options
-            const array = outer.mutation.appends[0]
-            const comparator = outer.mutation.store.amalgamator._comparator.stage
-            let { index, found } = outer.key == null
+            const array = this.mutation.appends[0]
+            const comparator = this.mutation.store.amalgamator._comparator.stage
+            let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
-                : find(comparator, array, [ outer.key ], 0, array.length - 1)
+                : find(comparator, array, [ this.key ], 0, array.length - 1)
             if (found || direction == -1) {
                 index += direction
             }
@@ -378,7 +374,7 @@ class MutatorIterator extends AmalgamatorIterator {
                 candidates.push({ array, index })
             }
             if (candidates.length == 0) {
-                outer.done = true
+                this.done = true
                 return { done: true, value: null }
             }
             candidates.sort((left, right) => {
@@ -391,8 +387,8 @@ class MutatorIterator extends AmalgamatorIterator {
             const item = candidate.array[candidate.index++]
             const result = this._filter(item)
             if (result == null || !result.done) {
-                outer.key = item.key[0]
-                outer.inclusive = false
+                this.key = item.key[0]
+                this.inclusive = false
             }
             if (result != null) {
                 return result
