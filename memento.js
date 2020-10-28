@@ -90,10 +90,6 @@ class AmalgamatorIterator {
         this.trampoline = new Trampoline
     }
 
-    [Symbol.asyncIterator] () {
-        return new OuterIterator(this)
-    }
-
     _search () {
         const {
             transaction: { _transaction: transaction },
@@ -209,10 +205,6 @@ class AmalgamatorIterator {
 class SnapshotIterator extends AmalgamatorIterator {
     constructor (options) {
         super(options)
-    }
-
-    [Symbol.asyncIterator] () {
-        return new OuterIterator(this)
     }
 
     get reversed () {
