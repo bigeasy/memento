@@ -1,4 +1,4 @@
-require('proof')(27, async okay => {
+require('proof')(36, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -279,8 +279,15 @@ require('proof')(27, async okay => {
                     gathered.push(president)
                 }
             }
+            okay(gathered, presidents.slice(0, 1), 'forward store snapshot')
 
-            okay(gathered, presidents.slice(0, 1), 'forward president snapshot')
+            gathered.length = 0
+            for await (const presidents of snapshot.reverse('president')) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, presidents.slice(0, 1), 'reverse store snapshot')
 
             gathered.length = 0
             for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
@@ -288,8 +295,31 @@ require('proof')(27, async okay => {
                     gathered.push(president)
                 }
             }
-
             okay(gathered, presidents.slice(0, 1), 'forward index snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, presidents.slice(0, 1), 'reverse index snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.map('president', [[ 1 ], [ 2 ]])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, [{
+                key: [ 1 ],
+                value: presidents[0],
+                sought: [ 1 ]
+            }, {
+                key: [ 2 ],
+                value: null,
+                sought: [ 2 ]
+            }], 'forward index snapshot')
         })
 
         await memento.mutator(async function (mutator) {
@@ -376,6 +406,65 @@ require('proof')(27, async okay => {
                 }
             }
             okay(gathered, expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal')
+        })
+
+        await memento.snapshot(async snapshot => {
+            const gathered = []
+            for await (const presidents of snapshot.forward('president')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            const expected = presidents.slice(0, 16).map(president => president.lastName)
+            okay(gathered, expected, 'store many forward snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.reverse('president')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            okay(gathered, expected.slice(0).reverse(), 'store many reverse snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            okay(gathered, expected.slice(0).sort(), 'index many forward snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.reverse([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+            }
+            okay(gathered, expected.slice(0).sort().reverse(), 'index many reverse snapshot')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.forward('president')) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+                if (gathered.length == 16) {
+                    presidents.reversed = true
+                }
+            }
+            okay(gathered, expected.concat(expected.slice(0).reverse().slice(1)), 'iterator reversal snapshot')
+
+            gathered.length = 0
+            memento.cache.purge(0)
+            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+                for (const president of presidents) {
+                    gathered.push(president.lastName)
+                }
+                if (gathered.length == 16) {
+                    presidents.reversed = true
+                }
+            }
+            okay(gathered,
+            expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal snapshot')
         })
 
         try {

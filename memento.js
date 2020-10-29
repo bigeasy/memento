@@ -470,6 +470,44 @@ class IteratorBuilder {
     }
 }
 
+class MapInnerIterator {
+}
+
+class MapIterator {
+    constructor (options) {
+        this._options = options
+    }
+
+    [Symbol.asyncIterator]() {
+        return this
+    }
+
+    _inner (items) {
+        return { done: false, value: items }
+    }
+}
+
+class SnapshotMapIterator extends MapIterator {
+    constructor (options) {
+        super(options)
+    }
+
+    async next () {
+        const trampoline = new Trampoline, scope = { items: null }
+        const { converter, iterator } = this._options
+        iterator.next(trampoline, items => {
+            converter(trampoline, items, items => scope.items = items)
+        })
+        while (trampoline.seek()) {
+            await trampoline.shift()
+        }
+        if (iterator.done) {
+            return { done: true, value: null }
+        }
+        return this._inner(scope.items)
+    }
+}
+
 class Transaction {
     constructor (Iterator, memento, transaction) {
         this._Iterator = Iterator
@@ -521,6 +559,71 @@ class Transaction {
                     return { key: item.key, value: item.parts[1], join: [] }
                 }))
             }
+        })
+    }
+
+    _foriegn (trampoline, items, consume, fixup) {
+        const converted = []
+        let i = 0
+        const get = () => {
+            if (i == items.length) {
+                consume(converted)
+            } else {
+                const key = {
+                    domestic: items[i].key[0].slice(0, manipulation.store.keyLength),
+                    foriegn: items[i].key[0].slice(manipulation.store.keyLength)
+                }
+                if (item[i].parts[0].method == 'remove') {
+                    converted[i] = fixup({ key: key.domestic, value: null }, { key: key.foreign, value: null })
+                    i++
+                    trampoline.sync(() => get())
+                } else {
+                    this._get(name[0], trampoline, key.foreign, foreign => {
+                        converted[i] = fixup({
+                            key: key.domestic,
+                            value: items[i]
+                        }, {
+                            key: key.foreign,
+                            value: foreign
+                        })
+                        i++
+                        trampoline.sync(() => get())
+                    })
+                }
+            }
+        }
+        get()
+    }
+
+    map (name, set, { extractor = $ => $ } = {}) {
+        const manipulation = this._manipulation(name)
+        const additional = manipulation.appends[0] || []
+        const { store: { amalgamator } } = this._manipulation(name)
+        const iterator = amalgamator.map(this._transaction, set, { extractor, additional })
+        return new SnapshotMapIterator({
+            transaction: this,
+            iterator: iterator,
+            manipulation: manipulation,
+            converter: Array.isArray(name)
+                ? (trampoline, items, consume) => {
+                    this._foriegn(trampoline, items, consume, (domestic, foreign) => {
+                        return {
+                            key: domestic.key,
+                            value: foreign.value,
+                            value: item.parts[0].method == 'remove' ? null : item.parts[1],
+                            sought: item.value
+                        }
+                    })
+                }
+                : (trampoline, items, consume) => {
+                    consume(items.map(item => {
+                        return {
+                            key: item.key[0],
+                            value: item.parts[0].method == 'remove' ? null : item.parts[1],
+                            sought: item.value
+                        }
+                    }))
+                }
         })
     }
 
