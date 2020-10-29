@@ -86,7 +86,7 @@ class AmalgamatorIterator {
         this.done = false
         this.joins = joins
         this.joined = null
-        this.comparator = manipulation.store.amalgamator._comparator.stage
+        this.comparator = manipulation.store.amalgamator.comparator.stage
         this.trampoline = new Trampoline
     }
 
@@ -310,7 +310,7 @@ class SnapshotIterator extends AmalgamatorIterator {
 class MutatorIterator extends AmalgamatorIterator {
     constructor (options) {
         super(options)
-        this.comparator = options.manipulation.store.amalgamator._comparator.stage
+        this.comparator = options.manipulation.store.amalgamator.comparator.stage
         this.trampoline = new Trampoline
     }
 
@@ -355,7 +355,7 @@ class MutatorIterator extends AmalgamatorIterator {
                 }
             }
             const array = this.manipulation.appends[0]
-            const comparator = this.manipulation.store.amalgamator._comparator.stage
+            const comparator = this.manipulation.store.amalgamator.comparator.stage
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
                 : find(comparator, array, [ this.key ], 0, array.length - 1)
@@ -407,7 +407,7 @@ class MutatorIterator extends AmalgamatorIterator {
             }
             for (let i = 0; i < this.joins.length; i++) {
                 const {
-                    store: { amalgamator: { _comparator: { stage: comparator } } },
+                    store: { amalgamator: { comparator: { stage: comparator } } },
                     appends
                 } = this.transaction._mutator(this.joins[0].name)
                 for (const array of appends) {
@@ -611,7 +611,8 @@ class Transaction {
                             key: domestic.key,
                             value: foreign.value,
                             value: item.parts[0].method == 'remove' ? null : item.parts[1],
-                            sought: item.value
+                            sought: item.sought,
+                            index: item.index
                         }
                     })
                 }
@@ -620,7 +621,8 @@ class Transaction {
                         return {
                             key: item.key[0],
                             value: item.parts[0].method == 'remove' ? null : item.parts[1],
-                            sought: item.value
+                            sought: item.sought,
+                            index: item.index
                         }
                     }))
                 }
@@ -757,7 +759,7 @@ class Mutator extends Transaction {
             version: compound[1],
             order: compound[2]
         }, record ]
-        const comparator = mutation.store.amalgamator._comparator.stage
+        const comparator = mutation.store.amalgamator.comparator.stage
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
         if (found) {
             array[index] = { key: compound, parts, value, join: null }
@@ -792,7 +794,7 @@ class Mutator extends Transaction {
     _get (name, trampoline, key, consume) {
         const mutation = this._mutator(name)
         // TODO Expose comparators in Amalgamate.
-        const comparator = mutation.store.amalgamator._comparator.stage
+        const comparator = mutation.store.amalgamator.comparator.stage
         for (const array of mutation.appends) {
             const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
             if (found) {

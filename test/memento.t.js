@@ -314,12 +314,14 @@ require('proof')(36, async okay => {
             okay(gathered, [{
                 key: [ 1 ],
                 value: presidents[0],
-                sought: [ 1 ]
+                sought: { key: [ 1 ], value: [ 1 ] },
+                index: 0
             }, {
                 key: [ 2 ],
                 value: null,
-                sought: [ 2 ]
-            }], 'forward index snapshot')
+                sought: { key: [ 2 ], value: [ 2 ] },
+                index: -1
+            }], 'forward index map')
         })
 
         await memento.mutator(async function (mutator) {
