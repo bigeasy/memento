@@ -1,4 +1,4 @@
-require('proof')(36, async okay => {
+require('proof')(37, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -313,15 +313,32 @@ require('proof')(36, async okay => {
             }
             okay(gathered, [{
                 key: [ 1 ],
-                value: presidents[0],
-                sought: { key: [ 1 ], value: [ 1 ] },
-                index: 0
+                value: [ 1 ],
+                items: [{ key: [ 1 ], value: presidents[0] }]
             }, {
                 key: [ 2 ],
-                value: null,
-                sought: { key: [ 2 ], value: [ 2 ] },
-                index: -1
-            }], 'forward index map')
+                value: [ 2 ],
+                items: []
+            }], 'store map')
+
+            gathered.length = 0
+            for await (const presidents of snapshot.map([ 'president', 'name' ], [[ 'Washington', 'George' ], [ 'Adams', 'John' ]])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, [{
+                key: [ 'Washington', 'George' ],
+                value: [ 'Washington', 'George' ],
+                items: [{
+                    key: [ 'Washington', 'George', 1 ],
+                    value: presidents[0]
+                }]
+            }, {
+                key: [ 'Adams', 'John' ],
+                value: [ 'Adams', 'John' ],
+                items: []
+            }], 'index map')
         })
 
         await memento.mutator(async function (mutator) {

@@ -562,67 +562,77 @@ class Transaction {
         })
     }
 
-    _foriegn (trampoline, items, consume, fixup) {
-        const converted = []
-        let i = 0
-        const get = () => {
-            if (i == items.length) {
-                consume(converted)
-            } else {
-                const key = {
-                    domestic: items[i].key[0].slice(0, manipulation.store.keyLength),
-                    foriegn: items[i].key[0].slice(manipulation.store.keyLength)
-                }
-                if (item[i].parts[0].method == 'remove') {
-                    converted[i] = fixup({ key: key.domestic, value: null }, { key: key.foreign, value: null })
-                    i++
-                    trampoline.sync(() => get())
-                } else {
-                    this._get(name[0], trampoline, key.foreign, foreign => {
-                        converted[i] = fixup({
-                            key: key.domestic,
-                            value: items[i]
-                        }, {
-                            key: key.foreign,
-                            value: foreign
-                        })
-                        i++
-                        trampoline.sync(() => get())
-                    })
-                }
-            }
-        }
-        get()
-    }
-
     map (name, set, { extractor = $ => $ } = {}) {
         const manipulation = this._manipulation(name)
         const additional = manipulation.appends[0] || []
         const { store: { amalgamator } } = this._manipulation(name)
-        const iterator = amalgamator.map(this._transaction, set, { extractor, additional })
+        const iterator = Array.isArray(name)
+            ? amalgamator.map(this._transaction, set, {
+                extractor, additional,
+                group: (sought, key) => {
+                    const partial = key.slice(0, sought.length)
+                    const matched = manipulation.store.amalgamator.comparator.primary(sought, partial) == 0
+                    return matched
+                }
+            })
+            : amalgamator.map(this._transaction, set, { extractor, additional })
         return new SnapshotMapIterator({
             transaction: this,
             iterator: iterator,
             manipulation: manipulation,
             converter: Array.isArray(name)
                 ? (trampoline, items, consume) => {
-                    this._foriegn(trampoline, items, consume, (domestic, foreign) => {
-                        return {
-                            key: domestic.key,
-                            value: foreign.value,
-                            value: item.parts[0].method == 'remove' ? null : item.parts[1],
-                            sought: item.sought,
-                            index: item.index
+                    const converted = []
+                    let i = 0, j = 0, entry
+                    const get = () => {
+                        if (i == items.length) {
+                            consume(converted)
+                        } else {
+                            if (j == 0) {
+                                converted.push(entry = {
+                                    key: items[i].key,
+                                    value: items[i].value,
+                                    items: []
+                                })
+                            }
+                            if (items[i].items.length == j) {
+                                j = 0
+                                i++
+                                trampoline.sync(() => get())
+                            } else {
+                                const key = {
+                                    domestic: items[i].items[j].key[0].slice(0, manipulation.store.keyLength),
+                                    foreign: items[i].items[j].key[0].slice(manipulation.store.keyLength)
+                                }
+                                if (items[i].items[j].parts[0].method == 'remove') {
+                                    j++
+                                    trampoline.sync(() => get())
+                                } else {
+                                    this._get(name[0], trampoline, key.foreign, foreign => {
+                                        assert(foreign.parts[0].method == 'insert')
+                                        entry.items.push({
+                                            key: items[i].items[j].key[0],
+                                            value: foreign.parts[1]
+                                        })
+                                        j++
+                                        trampoline.sync(() => get())
+                                    })
+                                }
+                            }
                         }
-                    })
+                    }
+                    get()
                 }
                 : (trampoline, items, consume) => {
                     consume(items.map(item => {
                         return {
-                            key: item.key[0],
-                            value: item.parts[0].method == 'remove' ? null : item.parts[1],
-                            sought: item.sought,
-                            index: item.index
+                            key: item.key,
+                            value: item.value,
+                            items: item.items.filter(item => {
+                                return item.parts[0].method != 'remove'
+                            }).map(item => {
+                                return { key: item.key[0], value: item.parts[1] }
+                            })
                         }
                     }))
                 }
