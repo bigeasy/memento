@@ -1,4 +1,4 @@
-require('proof')(37, async okay => {
+require('proof')(38, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -270,8 +270,7 @@ require('proof')(37, async okay => {
 
         await memento.snapshot(async snapshot => {
             okay(await snapshot.get('president', [ 1 ]), presidents[0], 'get store snapshot')
-            // TODO
-            // okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
+            okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
 
             const gathered = []
             for await (const presidents of snapshot.forward('president')) {

@@ -24,7 +24,12 @@ const ascension = require('ascension')
 
 const ROLLBACK = Symbol('rollback')
 
-const riffle = require('riffle')
+const mvcc = {
+    satiate: require('satiate'),
+    constrain: require('constrain/iterator'),
+    riffle: require('riffle'),
+    whittle: require('./partition')
+}
 
 function find (comparator, array, key, low, high) {
     let mid
@@ -523,8 +528,8 @@ class Transaction {
                 transaction: this,
                 manipulation: manipulation,
                 direction: direction,
-                key: null,
-                incluslive: true,
+                key: vargs.length == 0 ? null : vargs.shift(),
+                incluslive: vargs.length == 0 ? true : vargs.shift(),
                 converter: (trampoline, items, consume) => {
                     const converted = []
                     let i = 0
@@ -682,10 +687,28 @@ class Snapshot extends Transaction {
     }
 
     _get (name, trampoline, key, consume) {
-        const amalgamator = Array.isArray(name)
-            ? this._memento._stores[name[0]].indices[name[1]].amalgamator
-            : this._memento._stores[name].amalgamator
-        amalgamator.get(this._transaction, trampoline, key, consume)
+        if (Array.isArray(name)) {
+            const { amalgamator, keyLength, comparator }  = this._memento._stores[name[0]].indices[name[1]]
+            const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
+                return comparator(item.key.slice(0, keyLength), key) == 0
+            }), 1)
+            let got = false
+            iterator.next(trampoline, items => {
+                got = true
+                const key = items[0].key.slice(keyLength)
+                const { amalgamator } = this._memento._stores[name[0]]
+                amalgamator.get(this._transaction, trampoline, key, consume)
+            }, {
+                set done (value) {
+                    if (!got) {
+                        consume(null)
+                    }
+                }
+            })
+        } else {
+            const amalgamator = this._memento._stores[name].amalgamator
+            amalgamator.get(this._transaction, trampoline, key, consume)
+        }
     }
 
     release () {
@@ -1075,7 +1098,7 @@ class Memento {
         } else {
             memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
             const versions = new Set
-            const iterator = riffle(memento._commits, Strata.MIN)
+            const iterator = mvcc.riffle(memento._commits, Strata.MIN)
             const trampoline = new Trampoline
             while (! iterator.done) {
                 iterator.next(trampoline, items => {
@@ -1304,7 +1327,7 @@ class Memento {
         await amalgamator.recover(versions)
 
         store.indices[name] = {
-            destructible, amalgamator, extractor, keyLength: key.comparisons.length
+            destructible, amalgamator, comparator, extractor, keyLength: key.comparisons.length
         }
     }
 
