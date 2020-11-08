@@ -31,7 +31,7 @@
                             "keyify":                       "^2.0.4",
                             "reciprocate":                  "0.0.2",
                             "rescue":                       "7.0.0-alpha.1",
-                            "riffle":                       "2.0.0-alpha.40"
+                            "riffle":                       "2.0.0-alpha.44"
     },
     "devDependencies":
     {

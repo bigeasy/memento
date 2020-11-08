@@ -1075,7 +1075,7 @@ class Memento {
         } else {
             memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
             const versions = new Set
-            const iterator = riffle.forward(memento._commits, Strata.MIN)
+            const iterator = riffle(memento._commits, Strata.MIN)
             const trampoline = new Trampoline
             while (! iterator.done) {
                 iterator.next(trampoline, items => {
