@@ -1182,7 +1182,7 @@ class Memento {
         const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
 
-        const amalgamator = new Amalgamator(destructible, {
+        const amalgamator = await Amalgamator.open(destructible, {
             locker: this._locker,
             directory: path.join(directory, 'store'),
             cache: this.cache,
@@ -1221,8 +1221,6 @@ class Memento {
             createIfMissing: create,
             errorIfExists: create
         })
-
-        await amalgamator.ready
 
         await amalgamator.recover(versions)
 
@@ -1264,7 +1262,7 @@ class Memento {
         const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
 
-        const amalgamator = new Amalgamator(destructible, {
+        const amalgamator = await Amalgamator.open(destructible, {
             locker: this._locker,
             directory: path.join(directory, 'store'),
             cache: this.cache,
@@ -1302,8 +1300,6 @@ class Memento {
             createIfMissing: create,
             errorIfExists: create
         })
-
-        await amalgamator.ready
 
         await amalgamator.recover(versions)
 
