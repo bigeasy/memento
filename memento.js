@@ -1057,22 +1057,23 @@ class Memento {
                 return await list()
             }
         }
-        memento._commits = new Strata(memento._destructible.commits.durable('strata'), {
+        const subdirs = [ 'versions', 'stores', 'indices', 'commits' ].sort()
+        const dirs = await list()
+        const commits = {
             directory: path.resolve(memento.directory, 'commits'),
             cache: memento.cache,
             comparator: (left, right) => left - right,
-            serializer: 'json'
-        })
-        const subdirs = [ 'versions', 'stores', 'indices', 'commits' ].sort()
-        const dirs = await list()
-        if (dirs.length == 0) {
+            serializer: 'json',
+            create: dirs.length == 0
+        }
+        if (commits.create) {
             for (const dir of subdirs) {
                 await fs.mkdir(path.resolve(memento.directory, dir))
             }
             await fs.mkdir(path.resolve(memento.directory, './versions/0'))
-            await memento._commits.create()
+            memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
         } else {
-            await memento._commits.open()
+            memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
             const versions = new Set
             const iterator = riffle.forward(memento._commits, Strata.MIN)
             const trampoline = new Trampoline
