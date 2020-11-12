@@ -31,19 +31,17 @@ const mvcc = {
     whittle: require('./partition')
 }
 
-function find (comparator, array, key, low, high) {
-    let mid
-
-    while (low <= high) {
-        mid = low + ((high - low) >>> 1)
-        const compare = comparator(key, [ array[mid].key[0] ])
-        if (compare < 0) high = mid - 1
-        else if (compare > 0) low = mid + 1
-        else return { index: mid, found: true }
+const find = function () {
+    const find = require('b-tree/find')
+    return function (comparator, array, key, low, high) {
+        const index = find(function (left, right) {
+            return comparator(left.slice(0, 1), right.slice(0, 1))
+        }, array, key, low, high)
+        return index < 0
+            ? { index: ~index, found: false }
+            : { index: index, found: true }
     }
-
-    return { index: low, found: false }
-}
+} ()
 
 class InnerIterator {
     constructor (iterator) {
