@@ -1198,9 +1198,7 @@ class Memento {
                     : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        }), function (object) {
-            return object
-        })
+        }))
 
         const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
@@ -1278,9 +1276,7 @@ class Memento {
                     : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        }), function (object) {
-            return object
-        })
+        }))
 
         const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
         destructible.increment()
