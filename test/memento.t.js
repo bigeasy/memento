@@ -552,8 +552,6 @@ require('proof')(39, async okay => {
             okay(gathered, expected, 'inner join target changed')
         })
 
-        Error.stackTraceLimit = 999
-
         await memento.close()
     }))
 
