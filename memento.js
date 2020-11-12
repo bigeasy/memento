@@ -605,15 +605,12 @@ class Transaction {
                                 i++
                                 trampoline.sync(() => get())
                             } else {
-                                const key = {
-                                    domestic: items[i].items[j].key[0].slice(0, manipulation.store.keyLength),
-                                    foreign: items[i].items[j].key[0].slice(manipulation.store.keyLength)
-                                }
                                 if (items[i].items[j].parts[0].method == 'remove') {
                                     j++
                                     trampoline.sync(() => get())
                                 } else {
-                                    this._get(name[0], trampoline, key.foreign, foreign => {
+                                    const key = items[i].items[j].key[0].slice(manipulation.store.keyLength)
+                                    this._get(name[0], trampoline, key, foreign => {
                                         assert(foreign.parts[0].method == 'insert')
                                         entry.items.push({
                                             key: items[i].items[j].key[0],
