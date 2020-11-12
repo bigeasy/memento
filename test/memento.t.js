@@ -1,4 +1,4 @@
-require('proof')(38, async okay => {
+require('proof')(39, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -493,6 +493,21 @@ require('proof')(38, async okay => {
 
         memento = await createMemento(2)
 
+        await memento.snapshot(async snapshot => {
+            const gathered = []
+            let select = snapshot.forward('president').join('state', $ => [ $[0].state ])
+            for await (const items of select) {
+                for (const [ president, state ] of items) {
+                    gathered.push([ president.lastName, state.name ])
+                }
+            }
+            let expected = presidents.slice(0, 16).map(president => {
+                const name = states.filter(state => state.code == president.state).pop().name
+                return [ president.lastName,  name ]
+            })
+            okay(gathered, expected, 'inner join stored')
+        })
+
         await memento.mutator(async mutator => {
             const gathered = []
             let select = mutator.forward('president').join('state', $ => [ $[0].state ])
@@ -536,6 +551,8 @@ require('proof')(38, async okay => {
             }).concat([ [ 'Grant', 'Ohio 2' ] ])
             okay(gathered, expected, 'inner join target changed')
         })
+
+        Error.stackTraceLimit = 999
 
         await memento.close()
     }))

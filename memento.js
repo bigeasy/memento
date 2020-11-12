@@ -121,6 +121,24 @@ class AmalgamatorIterator {
         }
     }
 
+    _join (value, next) {
+        const values = [ value ], keys = [], { trampoline } = this
+        const join = (i) => {
+            if (i == this.joins.length) {
+                trampoline.sync(() => next(values, keys))
+            } else {
+                const { name, using } = this.joins[i]
+                const key = using(values)
+                keys.push(key)
+                this.transaction._get(name, trampoline, key, item => {
+                    values.push(item == null ? null : item.parts[1])
+                    trampoline.sync(() => join(i + 1))
+                })
+            }
+        }
+        join(0)
+    }
+
     async outer () {
         const { trampoline } = this, scope = { items: null, converted: null }
         if (trampoline.seek()) {
@@ -431,24 +449,6 @@ class MutatorIterator extends AmalgamatorIterator {
         } else {
             return { done: false, value: item.value }
         }
-    }
-
-    _join (value, next) {
-        const values = [ value ], keys = [], { trampoline } = this
-        const join = (i) => {
-            if (i == this.joins.length) {
-                trampoline.sync(() => next(values, keys))
-            } else {
-                const { name, using } = this.joins[i]
-                const key = using(values)
-                keys.push(key)
-                this.transaction._get(name, trampoline, key, item => {
-                    values.push(item == null ? null : item.parts[1])
-                    trampoline.sync(() => join(i + 1))
-                })
-            }
-        }
-        join(0)
     }
 }
 
