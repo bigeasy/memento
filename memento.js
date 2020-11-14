@@ -716,6 +716,7 @@ class Mutator extends Transaction {
 
     constructor (memento) {
         super(MutatorIterator, memento, memento._locker.mutator())
+        this._snapshot = memento._locker.snapshot()
         this._destructible = memento._destructible.mutators.ephemeral([ 'mutation', Mutator.instance++ ])
         this._destructible.increment()
         this._mutations = {}
@@ -759,15 +760,73 @@ class Mutator extends Transaction {
     // TODO Okay, so how do we say that any iterators should recalculate with a
     // new `Amalgamate.iterator()`? Use a count.
     async _merge (mutation) {
+        // This is wrong, but its a sketch of what would be right.
+        if (false && mutation.qualifier.length == 1) {
+            const appends = mutation.appends[1]
+            const trampoline = new Trampoline
+            const { indices } = this._memento._stores[mutation.qualifier[0]]
+            for (const name in indices) {
+                const index = indices[name]
+                const iterator = index.amalgamator.map(this._snapshot, appends, {
+                    extractor: entry => {
+                        // TODO This is wonky, just extract from the object?
+                        return index.extractor(entry.parts.slice(1))
+                    },
+                    group: (sought, key, found) => {
+                        console.log(sought, key, found)
+                        return false
+                    }
+                })
+                while (! iterator.done) {
+                    iterator.next(trampoline, items => {
+                        for (const item of items) {
+                            if (item.items.length != 0) {
+                                console.log(item)
+                            }
+                        }
+                    })
+                    while (trampoline.seek()) {
+                        await trampoline.shift()
+                    }
+                }
+            }
+        }
         await mutation.store.amalgamator.merge(this._transaction, mutation.appends[1])
+        const { indices } = mutation
+        for (const name in indices) {
+            await indices[name].store.amalgamator.merge(this._transaction, indices[name].appends[1])
+        }
         mutation.series++
         mutation.appends.pop()
+        for (const name in indices) {
+            await indices[name].appends.pop()
+        }
     }
 
+    // **TODO** Would really rather the nax be based on heft than based on
+    // count, but would mean exposing serialization, keeping it external, and
+    // furthermore keeping it in memory. What comes to mind at first is a b-tree
+    // that his held in memory so that each insert is actually written, the
+    // descent is synchronous and the insert or delete is synchronous, the
+    // writing takes place in the background.
+
+    // However, this is not really all that different from what we have now. The
+    // short buffers get backlogged one way or another, either here in memory or
+    // in the write queue. We have a write queue here. We're not keeping
+    // enormous amounts of entries in memory. We do want them to rotate out into
+    // amalgamation at some point. They go from our in-memory stages, which is a
+    // two-element queue, to the write queue of the b-tree, so I see no reason
+    // why we can't serialize before we write out.
+
+    //
     _maybeMerge (mutation, max) {
         const { appends } = mutation
         if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
+            const { indices } = mutation
+            for (const name in indices) {
+                indices[name].appends.unshift([])
+            }
             // TODO Really seems like a queue is appropriate.
             this._destructible.ephemeral([ 'merge'].concat(mutation.qualifier), this._merge(mutation))
         }
@@ -794,20 +853,26 @@ class Mutator extends Transaction {
         } else {
             array.splice(index, 0, { key: compound, parts, value, join: null })
         }
-        this._maybeMerge(mutation, 1024)
     }
 
     set (name, record) {
-        const manipulation = this._mutator(name)
-        const key = manipulation.store.amalgamator.strata.extract([ record ])
-        this._append(manipulation, 'insert', key, record, record)
-        for (const name in manipulation.indices) {
-            const index = manipulation.indices[name]
+        const mutation = this._mutator(name)
+        const key = mutation.store.amalgamator.strata.extract([ record ])
+        this._append(mutation, 'insert', key, record, record)
+        for (const name in mutation.indices) {
+            const index = mutation.indices[name]
             const key = index.store.extractor([ record ])
             this._append(index, 'insert', key, key, record)
         }
+        this._maybeMerge(mutation, 1024)
     }
 
+    // **NOTE**: We don't unset the index record. We just accept that when we
+    // lookup the actual value from the index it will be `null`. This is why you
+    // can't assume that there will always be an indexed record for every index
+    // record in your index based lookups. You are going to forget this.
+
+    //
     unset (name, key) {
         this._append({
             value: store.strata.extract([ record ]),
@@ -840,9 +905,6 @@ class Mutator extends Transaction {
             await this._destructible.drain()
             for (const mutation of mutations) {
                 this._maybeMerge(mutation, 1)
-                for (const name in mutation.indices) {
-                    this._maybeMerge(mutation.indices[name], 1)
-                }
             }
         } while (this._destructible.ephemerals != 0)
         if (mutations.some(mutation => mutation.conflicted)) {
@@ -863,6 +925,7 @@ class Mutator extends Transaction {
         await Strata.flush(writes)
         // TODO Here goes your commit write *before* you call in-memory commit.
         this._memento._locker.commit(this._transaction)
+        this._memento._locker.release(this._snapshot)
         this._destructible.decrement()
         this._destructible.decrement()
         return true
@@ -876,11 +939,13 @@ class Mutator extends Transaction {
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         do {
             await this._destructible.drain()
+            // **TODO** Why merge records you're just going to ignore?
             for (const mutation of mutations) {
                 this._maybeMerge(mutation, 1)
             }
         } while (this._destructible.ephemerals != 0)
         this._memento._locker.rollback(this._transaction)
+        this._memento._locker.release(this._snapshot)
         this._destructible.decrement()
         this._destructible.decrement()
     }
