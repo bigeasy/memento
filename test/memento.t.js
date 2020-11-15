@@ -552,6 +552,20 @@ require('proof')(39, async okay => {
             okay(gathered, expected, 'inner join target changed')
         })
 
+        await memento.mutator(async mutator => {
+            mutator.set('president', {
+                firstName: 'Fred',
+                lastName: 'Washington',
+                state: 'VA',
+                terms: [ 1 ]
+            })
+        })
+
+        await memento.snapshot(async snapshot => {
+            okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), null, 'get index unset')
+            okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), { ...presidents[0], firstName: 'Fred' }, 'get index changed')
+        })
+
         await memento.close()
     }))
 

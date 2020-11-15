@@ -683,14 +683,14 @@ class Snapshot extends Transaction {
 
     _get (name, trampoline, key, consume) {
         if (Array.isArray(name)) {
-            const { amalgamator, keyLength, comparator }  = this._memento._stores[name[0]].indices[name[1]]
+            const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].indices[name[1]]
             const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
-                return comparator(item.key.slice(0, keyLength), key) == 0
+                return comparator(item.key[0].slice(0, keyLength), key) != 0
             }), 1)
             let got = false
             iterator.next(trampoline, items => {
                 got = true
-                const key = items[0].key.slice(keyLength)
+                const key = items[0].key[0].slice(keyLength)
                 const { amalgamator } = this._memento._stores[name[0]]
                 amalgamator.get(this._transaction, trampoline, key, consume)
             }, {
@@ -760,34 +760,39 @@ class Mutator extends Transaction {
     // TODO Okay, so how do we say that any iterators should recalculate with a
     // new `Amalgamate.iterator()`? Use a count.
     async _merge (mutation) {
-        // This is wrong, but its a sketch of what would be right.
-        if (false && mutation.qualifier.length == 1) {
-            const appends = mutation.appends[1]
+        assert(mutation.qualifier.length == 1)
+        if (Object.keys(mutation.indices).length != 0) {
+            const iterator = mutation.store.amalgamator.map(this._snapshot, mutation.appends[1], {
+                extractor: entry => {
+                    return entry.key[0]
+                }
+            })
             const trampoline = new Trampoline
-            const { indices } = this._memento._stores[mutation.qualifier[0]]
-            for (const name in indices) {
-                const index = indices[name]
-                const iterator = index.amalgamator.map(this._snapshot, appends, {
-                    extractor: entry => {
-                        // TODO This is wonky, just extract from the object?
-                        return index.extractor(entry.parts.slice(1))
-                    },
-                    group: (sought, key, found) => {
-                        console.log(sought, key, found)
-                        return false
-                    }
-                })
-                while (! iterator.done) {
-                    iterator.next(trampoline, items => {
-                        for (const item of items) {
-                            if (item.items.length != 0) {
-                                console.log(item)
+            while (! iterator.done) {
+                iterator.next(trampoline, entries => {
+                    for (const name in mutation.indices) {
+                        const deletions = []
+                        const { amalgamator, extractor, comparator, keyLength } = mutation.indices[name].store
+                        for (const entry of entries) {
+                            for (const item of entry.items) {
+                                // **TODO** Why do I have to encase this in
+                                // an array?
+                                const previous = extractor([ item.parts[1] ])
+                                if (entry.value.parts[0].method == 'delete' ||
+                                    comparator(extractor([ entry.value.value ]).slice(0, keyLength), previous.slice(0, keyLength)) != 0
+                                ) {
+                                    deletions.push({
+                                        key: [ previous ],
+                                        parts: [{ method: 'remove' }, previous ]
+                                    })
+                                }
                             }
                         }
-                    })
-                    while (trampoline.seek()) {
-                        await trampoline.shift()
+                        mutation.indices[name].appends[1] = deletions.concat(mutation.indices[name].appends[1])
                     }
+                })
+                while (trampoline.seek()) {
+                    await trampoline.shift()
                 }
             }
         }
@@ -871,17 +876,16 @@ class Mutator extends Transaction {
     // lookup the actual value from the index it will be `null`. This is why you
     // can't assume that there will always be an indexed record for every index
     // record in your index based lookups. You are going to forget this.
+    //
+    // We probably do need to remove them, won't the get inserted otherwise?
+    //
+    // We are going to do our deletes of index entries when we actually merge
+    // since we need to delete to both remove and update and update is based on
+    // the value we have at the time of merge.
 
     //
     unset (name, key) {
-        this._append({
-            value: store.strata.extract([ record ]),
-            version: this._version,
-            order: this._index++
-        }, [{
-            header: { method: 'remove', order: this._index },
-            version: this._version
-        }, key ])
+        this._append(this._mutator(name), 'remove', key, key, null)
     }
 
     _get (name, trampoline, key, consume) {
