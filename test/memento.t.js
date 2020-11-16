@@ -1,4 +1,4 @@
-require('proof')(39, async okay => {
+require('proof')(41, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
