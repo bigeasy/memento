@@ -21,15 +21,25 @@ const rescue = require('rescue')
 const coalesce = require('extant')
 
 const ascension = require('ascension')
+const whittle = require('whittle')
 
 const ROLLBACK = Symbol('rollback')
 
 const mvcc = {
     satiate: require('satiate'),
     constrain: require('constrain/iterator'),
-    riffle: require('riffle'),
-    whittle: require('./partition')
+    riffle: require('riffle')
 }
+
+const find2 = function () {
+    const find = require('b-tree/find')
+    return function (comparator, array, key, low, high) {
+        const index = find(comparator, array, key, low, high)
+        return index < 0
+            ? { index: ~index, found: false }
+            : { index: index, found: true }
+    }
+} ()
 
 const find = function () {
     const find = require('b-tree/find')
@@ -885,19 +895,58 @@ class Mutator extends Transaction {
         this._append(this._mutator(name), 'remove', key, key, null)
     }
 
-    _get (name, trampoline, key, consume) {
-        const mutation = this._mutator(name)
-        // TODO Expose comparators in Amalgamate.
-        const comparator = mutation.store.amalgamator.comparator.stage
+    ___get (mutation, key) {
+        const { amalgamator, comparator, getter } = mutation.store
         for (const array of mutation.appends) {
-            const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
+            const { index, found } = find2(getter, array, [ key ], 0, array.length - 1)
             if (found) {
-                const item = array[index]
-                consume(item.method == 'remove' ? null : item)
-                return
+                return array[index]
             }
         }
-        mutation.store.amalgamator.get(this._transaction, trampoline, key, consume)
+    }
+
+    __get (mutation, trampoline, key, consume) {
+        const got = this.___get(mutation, key)
+        if (got != null) {
+            consume(got)
+        } else {
+            const { amalgamator, comparator, keyLength, getter } = mutation.store
+            const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
+                return getter != 0
+            }), 1)
+            let got = false
+            iterator.next(trampoline, items => {
+                got = true
+                consume(items[0])
+            }, {
+                set done (value) {
+                    if (!got) {
+                        consume(null)
+                    }
+                }
+            })
+        }
+    }
+
+    _get (name, trampoline, key, consume) {
+        // **TODO** Maybe we have `_mutator` return based on store or index?
+        const mutation = this._manipulation(name)
+        if (Array.isArray(name)) {
+            this.__get(mutation, trampoline, key, got => {
+                if (got != null) {
+                    this._get(name[0], trampoline, key, consume)
+                } else {
+                    consume(got)
+                }
+            })
+        } else {
+            const got = this.___get(mutation, key)
+            if (got != null) {
+                consume(got.parts[0].method == 'remove' ? null : got)
+            } else {
+                mutation.store.amalgamator.get(this._transaction, trampoline, key, consume)
+            }
+        }
     }
 
     async commit () {
@@ -1306,7 +1355,14 @@ class Memento {
 
         await amalgamator.recover(versions)
 
-        this._stores[name] = { destructible, amalgamator, indices: {}, comparisons }
+        this._stores[name] = {
+            destructible,
+            amalgamator,
+            indices: {},
+            comparisons,
+            comparator,
+            getter: whittle(comparator, key => key[0])
+        }
     }
 
     async _index (versions, [ storeName, name ], directory, create = false) {
@@ -1383,8 +1439,17 @@ class Memento {
 
         await amalgamator.recover(versions)
 
+        const partials = []
+        for (let i = 1; i < key.comparisons.length; i++) {
+            partials.push(function (i) {
+                return whittle(comparator, key => key[0].slice(0, i))
+            } (i))
+        }
+
         store.indices[name] = {
-            destructible, amalgamator, comparator, extractor, keyLength: key.comparisons.length
+            destructible, amalgamator, comparator, extractor,
+            keyLength: key.comparisons.length, partials,
+            getter: partials[key.comparisons.length - 2]
         }
     }
 

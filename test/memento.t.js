@@ -227,6 +227,7 @@ require('proof')(41, async okay => {
 
             // TODO Get index.
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get')
+            okay(await mutator.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get')
 
             const gathered = []
             for await (const employees of mutator.forward('president')) {
@@ -564,6 +565,16 @@ require('proof')(41, async okay => {
         await memento.snapshot(async snapshot => {
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), null, 'get index unset')
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), { ...presidents[0], firstName: 'Fred' }, 'get index changed')
+        })
+
+        await memento.mutator(async mutator => {
+            mutator.unset('president', [ 1 ])
+            okay(await mutator.get('president', [ 1 ]), null, 'get unset')
+            okay(await mutator.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), null, 'get index unset')
+        })
+
+        await memento.snapshot(async snapshot => {
+            okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), null, 'item unset snapshot')
         })
 
         await memento.close()
