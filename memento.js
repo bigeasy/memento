@@ -473,9 +473,6 @@ class IteratorBuilder {
     }
 }
 
-class MapInnerIterator {
-}
-
 class MapIterator {
     constructor (options) {
         this._options = options
