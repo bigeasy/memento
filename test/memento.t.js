@@ -1,4 +1,4 @@
-require('proof')(41, async okay => {
+require('proof')(45, async okay => {
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -377,7 +377,7 @@ require('proof')(41, async okay => {
                 }
             }
             const expected = presidents.slice(0, 16).map(president => president.lastName)
-            okay(gathered, expected, 'insert and interate many forward')
+            okay(gathered, expected, 'insert and iterate many forward')
 
             gathered.length = 0
             for await (const presidents of mutator.reverse('president')) {
@@ -385,7 +385,7 @@ require('proof')(41, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            okay(gathered, expected.slice(0).reverse(), 'insert and interate many reverse')
+            okay(gathered, expected.slice(0).reverse(), 'insert and iterate many reverse')
 
             gathered.length = 0
             for await (const presidents of mutator.forward([ 'president', 'name' ])) {
@@ -393,7 +393,7 @@ require('proof')(41, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            okay(gathered, expected.slice(0).sort(), 'insert and interate many index forward')
+            okay(gathered, expected.slice(0).sort(), 'insert and iterate many index forward')
 
             gathered.length = 0
             for await (const presidents of mutator.reverse([ 'president', 'name' ])) {
@@ -401,7 +401,7 @@ require('proof')(41, async okay => {
                     gathered.push(president.lastName)
                 }
             }
-            okay(gathered, expected.slice(0).sort().reverse(), 'insert and interate many index reverse')
+            okay(gathered, expected.slice(0).sort().reverse(), 'insert and iterate many index reverse')
 
             gathered.length = 0
             for await (const presidents of mutator.forward('president')) {
