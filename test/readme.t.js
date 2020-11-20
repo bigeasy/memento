@@ -75,9 +75,11 @@ require('proof')(2, async okay => {
             break
         }
     })
+    //
 
     // In order to add or remove data from the database you invoke
-    // `Memento.mutator()` with an `async` mutation function.
+    // `memento.mutator()` with an `async` mutation callback function. The
+    // mutation function will be called with a `Mutator` object.
 
     // The mutator function represents an atomic transaction against the
     // database. Changes made within the function are only visible within the
@@ -94,6 +96,7 @@ require('proof')(2, async okay => {
             firstName: 'George', lastName: 'Washington'
         }, 'isolated view of inserted record')
     })
+    //
 
     // You'll notice that the `mutator.set()` method is a synchronous function.
     // This is because we want inserts and deletes to be fast. Rather than
@@ -112,7 +115,43 @@ require('proof')(2, async okay => {
     // We'll make up for this discrepancy when we look at ranged queries,
     // iterators, and joins.
 
-    // **TODO** A snapshot.
+    // Note that the `Snapshot` object is only valid during the invocation of
+    // the snapshot callback function. If you attempt to save it and use later
+    // you will get undefined behavior. Currently, there are no assertions to
+    // keep you from doing this, just don't do it.
+    //
+    // ```
+    // let evilMutator
+    // await memento.mutator(async mutator => {
+    //     evilMutator = mutator
+    // })
+    // // No!
+    // evilMutator.set('president', {
+    //     firstName: 'John',
+    //     lastName: 'Adams',
+    //     terms: [ 1 ]
+    // })
+    // ```
+
+    // When we only want to read the database we use a `mutator.snapshot()` with
+    // an `async` snapshot callback function. The snapshot function will be
+    // called with a `Snapshot` object.
+
+    // Use the `Snapshot`, the snapshot function can perform read-only requests
+    // on the database. The `Snapshot` will have a point in time view of the
+    // database. Any changes made by mutators that commit after the the snapshot
+    // callback function begins will not be visible to the snapshot function.
+
+    //
+    await memento.snapshot(async snapshot => {
+        const got = await snapshot.get('president', [ 'Washington', 'George' ])
+        okay(got, {
+            firstName: 'George', lastName: 'Washington'
+        }, 'snapshot view of inserted record')
+    })
+    //
+
+    //
 
     await memento.close()
 })
