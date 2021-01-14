@@ -25,7 +25,7 @@
 // about Memento.
 
 //
-require('proof')(2, async okay => {
+require('proof')(3, async okay => {
     // To use Memento in your project it you'll want to install it from NPM.
     //
     // ```text
