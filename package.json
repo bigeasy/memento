@@ -10,7 +10,7 @@
                             "paxos", "rsm", "replicated", "state", "machine",
                             "etcd"
     ],
-    "author":               "Alan Gutierrez",
+    "author":               "Alan Gutierrez <alan@prettyrobots.com>",
     "homepage":             "http://bigeasy.github.com/cadence",
     "bugs":                 "http://bigeasy.github.com/cadence/issues",
     "license":              "MIT",
