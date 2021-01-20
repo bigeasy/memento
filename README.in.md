@@ -18,9 +18,9 @@ A pure-JavaScript `async`/`await` indexed, persistant database.
 Memento installs from NPM.
 
 ```text
+//{ "mode": "text" }
 npm install memento
 ```
-
 Memento is a database that supports atomic, isolated transactions, written to a
 write-ahead log and synced for durability in the event of system crash, and
 merged into b-trees for fast retrieval. It reads from an in memory page cache
@@ -37,7 +37,10 @@ Proof `okay` function to assert out statements in the readme. A Proof unit test
 generally looks like this.
 
 ```javascript
-require('proof')(4, async okay => {
+//{ "code": { "tests": 6 }, "text": { "tests": 4  } }
+require('proof')(%(tests)d, async okay => {
+    //{ "include": "testRequire" }
+    //{ "include": "test" }
     okay('always okay')
     okay(true, 'okay if true')
     okay(1, 1, 'okay if equal')
@@ -49,6 +52,7 @@ You can run this unit test yourself to see the output from the various
 code sections of the readme.
 
 ```text
+//{ "mode": "text" }
 git clone git@github.com:bigeasy/memento.git
 cd memento
 npm install --no-package-lock --no-save
@@ -58,7 +62,27 @@ node test/readme.t.js
 The `'memento'` module exports a single `Memento` object.
 
 ```javascript
+//{ "name": "displayedRequire", "mode": "text" }
 const Memento = require('avenue')
+```
+
+```javascript
+//{ "name": "testRequire", "mode": "code" }
+const Memento = require('..')
+
+const path = require('path')
+const fs = require('fs').promises
+
+const directory = path.resolve(__dirname, './tmp/readme')
+await fs.rmdir(directory, { recursive: true })
+await fs.mkdir(directory, { recursive: true })
+```
+
+```javascript
+//{ "name": "test", "mode": "code" }
+{
+    //{ "include": "introduction" }
+}
 ```
 
 We create a database object with the static `async Memento.open` function. It
@@ -71,6 +95,7 @@ to create new stores and indices in the update function. Once the database is
 open you're not allowed to make any schema changes.
 
 ```javascript
+//{ "name": "introduction" }
 const directory = path.resolve(__dirname, './tmp/readme')
 const memento = await Memento.open({ directory }, async schema => {
     switch (schema.version.target) {
@@ -92,6 +117,7 @@ become visible outside of the function when the function returns successfully.
 If the function raises and exception, the changes are rolled back.
 
 ```javascript
+//{ "name": "introduction" }
 await memento.mutator(async mutator => {
     mutator.set('president', { firstName: 'George', lastName: 'Washington' })
     const got = await mutator.get('president', [ 'Washington', 'George' ])
@@ -124,6 +150,7 @@ undefined behavior. Currently, there are no assertions to keep you from doing
 this, just don't do it.
 
 ```javascript
+//{ "mode": "text" }
 let evilMutator
 await memento.mutator(async mutator => {
     evilMutator = mutator
@@ -146,6 +173,7 @@ changes made by mutators that commit after the the snapshot callback function
 begins will not be visible to the snapshot function.
 
 ```javascript
+//{ "name": "introduction" }
 await memento.snapshot(async snapshot => {
     const got = await snapshot.get('president', [ 'Washington', 'George' ])
     okay(got, {
@@ -157,5 +185,6 @@ await memento.snapshot(async snapshot => {
 When you are done with Memento you close it.
 
 ```javascript
+//{ "name": "introduction" }
 await memento.close()
 ```

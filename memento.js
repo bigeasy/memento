@@ -1,20 +1,43 @@
-const path = require('path')
+// # Memento
+
+// Welcome back. Here's the stuff that will take some time to load into
+// programmer memory.
+
+//  * Store and index rename and delete are always tricky.
+//  * Inner iteration of mutators and why you're brilliant idea on how to make
+//  it simpler or more elegant is probably worthless.
+//  * Where joins are stored in memmory for mutators and how upsert and delete
+//  makes them a particularly difficult.
+//  * Updating joins at commit is always a delete and insert operation.
+//  * Maps are generally unused and unexplored in applications, so there's a lot
+//  hiding in there.
+//  * A lot of the commit and rollback complexity is in Amalgamator which is
+//  pretty well understood and therefore pretty easy to load.
+
+//
+
+// Node.js API.
 const fs = require('fs').promises
+const path = require('path')
+const assert = require('assert')
 
 const Destructible = require('destructible')
 const Trampoline = require('reciprocate')
 const Interrupt = require('interrupt')
-
 const Keyify = require('keyify')
 
-const assert = require('assert')
 
 const Strata = require('b-tree')
-const Cache = require('b-tree/cache')
+const Magazine = require('magazine')
 
-const Locker = require('amalgamate/locker')
+const Fracture = require('fracture')
+const Rotator = require('amalgamate/rotator')
 const Amalgamator = require('amalgamate')
 const Journalist = require('journalist')
+const WriteAhead = require('writeahead')
+const Operation = require('operation')
+const Turnstile = require('turnstile')
+const Verbatim = require('verbatim')
 
 const rescue = require('rescue')
 
@@ -31,6 +54,7 @@ const mvcc = {
     riffle: require('riffle')
 }
 
+// **TODO** You should only need to keep one of these.
 const find2 = function () {
     const find = require('b-tree/find')
     return function (comparator, array, key, low, high) {
@@ -52,7 +76,11 @@ const find = function () {
             : { index: index, found: true }
     }
 } ()
+//
 
+// Public interface to the synchronous methods of an iterator.
+
+//
 class InnerIterator {
     constructor (iterator) {
         this._iterator = iterator
@@ -74,7 +102,11 @@ class InnerIterator {
         return this._iterator.inner()
     }
 }
+//
 
+// Public interface to the asynchronous methods of an iterator.
+
+//
 class OuterIterator {
     constructor (iterator) {
         this._iterator = iterator
@@ -85,6 +117,8 @@ class OuterIterator {
     }
 }
 
+// Base class containing the functionality common to both mutator and snapshot
+// iterators.
 class AmalgamatorIterator {
     constructor({
         transaction, manipulation, direction, key, inclusive, converter, joins = []
@@ -137,8 +171,7 @@ class AmalgamatorIterator {
             } else {
                 const { name, using } = this.joins[i]
                 const key = using(values)
-                keys.push(key)
-                this.transaction._get(name, trampoline, key, item => {
+                this.transaction._get(name, key, trampoline, item => {
                     values.push(item == null ? null : item.parts[1])
                     trampoline.sync(() => join(i + 1))
                 })
@@ -149,12 +182,22 @@ class AmalgamatorIterator {
 
     async outer () {
         const { trampoline } = this, scope = { items: null, converted: null }
+        // If we do this its because we optimistically tried to find a joined
+        // value synchronously in the inner iterator but the trampoline reports
+        // a necessary async call.
         if (trampoline.seek()) {
             return { done: false, value: new InnerIterator(this) }
         }
         if (this.done) {
             return { done: true, value: null }
         }
+        // We have begun merge, meaning we need to add the old in-memory array
+        // to our MVCC iterator, or finished merge, meaning we need to recreate
+        // our iterator so it excludes the old in-memory array and includes our
+        // merged data. (Do we really need to so the latter? The in-memory array
+        // will always have what we merged and it really ought to only matter
+        // when we shift a new in-memory array to the head. While you think
+        // about this recall that there are only ever two in-memory stages.)
         if (this.series != this.manipulation.series) {
             this.series = this.manipulation.series
             this._search()
@@ -227,6 +270,7 @@ class AmalgamatorIterator {
         return { done: false, value: new InnerIterator(this) }
     }
 }
+//
 
 // DRY. Unless you really want to see what the code would look like without the
 // added complexity of the in-memory stage. It would look like this, but I
@@ -289,6 +333,7 @@ class SnapshotIterator extends AmalgamatorIterator {
         }
     }
 }
+//
 
 // When we join in a snapshot, we can easily use the trampoline `get` to do our
 // join in the outer iterator and return an array of joined values.
@@ -314,11 +359,11 @@ class SnapshotIterator extends AmalgamatorIterator {
 // lookup on the in memory store is a synchronous operation and therefore
 // cheaper than an async operation if the value is in the in memory store.
 
-// Worse, the user may perform a set or unset of a value into the collection we're
-// iterating. This will be a new entry and we won't have a value for its insert
-// index in your join map. We will not have done the trampoline join to lookup
-// the stored value for that new record and we need an `async` function in which
-// to run the trampoline.
+// Worse, the user may perform a set or unset of a value into the collection
+// we're iterating. This will be a new entry and we won't have a value for its
+// insert index in the join map. We will not have done the trampoline join to
+// lookup the stored value for that new record and we need an `async` function
+// in which to run the trampoline.
 
 // What we do is we look up the value with a trampoline, but we do not run the
 // trampoline. If the values are in the in memory stage of the joined store or
@@ -333,7 +378,8 @@ class SnapshotIterator extends AmalgamatorIterator {
 // machine. So, the trampoline call should endeavor to simply put the join into
 // the map and if successful we just run the filter again.
 
-// We'll start with the problem of doing a join against kkk
+// We'll start with the problem of doing a join against...
+
 // To do a join normally, we take the array we've created and add values to the
 // join array in each object in the array. We return the value or skip it
 
@@ -344,7 +390,22 @@ class MutatorIterator extends AmalgamatorIterator {
         this.comparator = options.manipulation.store.amalgamator.comparator.stage
         this.trampoline = new Trampoline
     }
+    //
 
+    // When must search our in memory stage for each inner iteration because the
+    // user can synchronously upsert or delete at any time changing the
+    // in-memory stage. We are constantly updating our `key` for search.
+    // **TODO** create a `_previous` property. Considered using a node based
+    // structure so iteration could be done by reference, but the in-memory
+    // stage can be replaced synchronously at any moment. Wait, doesn't that
+    // mean we can lose track of it? Yes, we can. **TODO** When we rotate our
+    // in-memory stage we need to increment the series so that we force a new
+    // amalgamator iterator generation.
+    //
+    // **TODO** Note that, because we only ever insert records into the
+    // in-memory stage, we can probably exclude the bottom or top that we've
+    // already traversed when performing a subsequent search.
+    //
     // The problem with advancing over our in-memory or file backed stage is
     // that there may be writes to the stage that are greater than the last
     // value returned, but less than any of the values that have been sliced
@@ -352,7 +413,7 @@ class MutatorIterator extends AmalgamatorIterator {
     // doesn't help. If the last value returned from our primary tree is 'a',
     // and the index of the in-memory stage is pointing at 'z', then if we've
     // inserted 'b' since our last `next()` we are not going to see it, we will
-    // continue from 'z' if we've been adjusting our index for the inserts.
+    // continue from 'z' even if we've been adjusting our index for the inserts.
     //
     // What if we don't advance the index? We'll let's say the amalgamaged tree
     // is at 'z' and our in-memory store is at 'b' so we reutrn 'b'. Now we
@@ -386,7 +447,7 @@ class MutatorIterator extends AmalgamatorIterator {
                 }
             }
             const array = this.manipulation.appends[0]
-            const comparator = this.manipulation.store.amalgamator.comparator.stage
+            const comparator = this.manipulation.store.amalgamator.comparator.stage.key
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
                 : find(comparator, array, [ this.key ], 0, array.length - 1)
@@ -543,7 +604,7 @@ class Transaction {
                             consume(converted)
                         } else {
                             const key = items[i].key[0].slice(manipulation.store.keyLength)
-                            this._get(name[0], trampoline, key, item => {
+                            this._get(name[0], key, trampoline, item => {
                                 assert(item != null)
                                 converted[i] = {
                                     key: items[i].key, value: item.parts[1], join: []
@@ -615,7 +676,7 @@ class Transaction {
                                     trampoline.sync(() => get())
                                 } else {
                                     const key = items[i].items[j].key[0].slice(manipulation.store.keyLength)
-                                    this._get(name[0], trampoline, key, foreign => {
+                                    this._get(name[0], key, trampoline, foreign => {
                                         assert(foreign.parts[0].method == 'insert')
                                         entry.items.push({
                                             key: items[i].items[j].key[0],
@@ -654,19 +715,17 @@ class Transaction {
         return this._iterator(name, vargs, 'reverse')
     }
 
-    async get (name, key) {
-        const trampoline = new Trampoline, scope = { item: null }
-        this._get(name, trampoline, key, item => scope.item = item)
-        while (trampoline.seek()) {
-            await trampoline.shift()
-        }
-        return scope.item == null ? null : scope.item.parts[1]
+    get (name, key, trampoline = new Trampoline, consume = value => trampoline.set(value)) {
+        this._get(name, key, trampoline, item => {
+            consume(item == null ? null : item.parts[1])
+        })
+        return trampoline
     }
 }
 
 class Snapshot extends Transaction {
     constructor (memento) {
-        super(SnapshotIterator, memento, memento._locker.snapshot())
+        super(SnapshotIterator, memento, memento._rotator.locker.snapshot())
     }
 
     _manipulation (name) {
@@ -688,7 +747,7 @@ class Snapshot extends Transaction {
         }
     }
 
-    _get (name, trampoline, key, consume) {
+    _get (name, key, trampoline, consume) {
         if (Array.isArray(name)) {
             const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].indices[name[1]]
             const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
@@ -711,26 +770,64 @@ class Snapshot extends Transaction {
             const amalgamator = this._memento._stores[name].amalgamator
             amalgamator.get(this._transaction, trampoline, key, consume)
         }
+        return trampoline
     }
 
     release () {
-        this._memento._locker.release(this._transaction)
+        this._memento._rotator.locker.release(this._transaction)
     }
 }
+//
 
+// The mutator class has a confusing internal structure called a mutation which
+// is easy to confuse with an Amalgamator mutator or this Mutator class,
+// (**TODO** so let's rename it).
+
+// Contains an Amalgamtor mutator and an Amalgamator snapshot. The snapshot is
+// used for isolation of queries, the mutator is making its decisions based on
+// this snapshot. Amalgamator snapshot and mutator creation are atomic so they
+// are guaranteed to reference the same version of the database.
+
+// Isolation is done by inserting updates into an in-memory array that is
+// occasionally rotated out into the amalgamator staging tree. This in-memory
+// tree is isolated from other Memento snapshots and mutators. The staged
+// writes are isolated by the Amalgamtor MVCC version logic.
+
+// Because upserts and deletes are in-memory, they are synchronous.
+
+//
 class Mutator extends Transaction {
-    static instance = 0
+    // Instance is used to create unique keys when we insert merges into the
+    // merge fracture, **TODO** but we can use the locker version. **TODO**
+    // Locker mutator and snapshot, shouldn't they be first-class objects by
+    // now?
 
+    //
+    static instance = 0
+    //
+
+    // Private constructor creates a mutator for the given memento. Our
+    // super-class uses our Amalgamator mutator to perform get and iteration
+    // while our snapshot is kept locally. The snapshot is used to obtain the
+    // existing version of a store object so we can delete the index entries
+    // based on the values extracted from the existing object. **TODO** Which is
+    // where we left off when we went diving into the dependencies in *gulp*
+    // November.
+
+    //
     constructor (memento) {
-        super(MutatorIterator, memento, memento._locker.mutator())
-        this._snapshot = memento._locker.snapshot()
-        this._destructible = memento._destructible.mutators.ephemeral([ 'mutation', Mutator.instance++ ])
-        this._destructible.increment()
+        super(MutatorIterator, memento, memento._rotator.locker.mutator())
+        this._snapshot = memento._rotator.locker.snapshot()
         this._mutations = {}
         this._index = 0
         this._references = []
+        this._futures = new Fracture.FutureSet
     }
+    //
 
+    // Internal construction of a "mutator." **TODO** Rename this, please.
+
+    //
     _mutator (name) {
         const mutation = this._mutations[name]
         if (mutation == null) {
@@ -756,79 +853,28 @@ class Mutator extends Transaction {
         }
         return mutation
     }
+    //
 
+    // **TODO** This is ready to take the place of the overloaded `_mutator`.
+
+    //
     _manipulation (name) {
         if (Array.isArray(name)) {
             return this._mutator(name[0]).indices[name[1]]
         }
         return this._mutator(name)
     }
+    //
 
-    // TODO Okay, so how do we say that any iterators should recalculate with a
-    // new `Amalgamate.iterator()`? Use a count.
-    async _merge (mutation) {
-        assert(mutation.qualifier.length == 1)
-        if (Object.keys(mutation.indices).length != 0) {
-            const iterator = mutation.store.amalgamator.map(this._snapshot, mutation.appends[1], {
-                extractor: entry => {
-                    return entry.key[0]
-                }
-            })
-            const trampoline = new Trampoline
-            while (! iterator.done) {
-                iterator.next(trampoline, entries => {
-                    for (const name in mutation.indices) {
-                        const deletions = []
-                        const { amalgamator, extractor, comparator, keyLength } = mutation.indices[name].store
-                        for (const entry of entries) {
-                            for (const item of entry.items) {
-                                // **TODO** Why do I have to encase this in
-                                // an array?
-                                const previous = extractor([ item.parts[1] ])
-                                if (entry.value.parts[0].method == 'delete' ||
-                                    comparator(extractor([ entry.value.value ]).slice(0, keyLength), previous.slice(0, keyLength)) != 0
-                                ) {
-                                    deletions.push({
-                                        key: [ previous ],
-                                        parts: [{ method: 'remove' }, previous ]
-                                    })
-                                }
-                            }
-                        }
-                        mutation.indices[name].appends[1] = deletions.concat(mutation.indices[name].appends[1])
-                    }
-                })
-                while (trampoline.seek()) {
-                    await trampoline.shift()
-                }
-            }
-        }
-        await mutation.store.amalgamator.merge(this._transaction, mutation.appends[1])
-        const { indices } = mutation
-        for (const name in indices) {
-            await indices[name].store.amalgamator.merge(this._transaction, indices[name].appends[1])
-        }
-        mutation.series++
-        mutation.appends.pop()
-        for (const name in indices) {
-            await indices[name].appends.pop()
-        }
-    }
+    // **TODO** Implement in-memory max based on record heft. We duplicate the
+    // memory of the buffer and the object in the stage, so this is truly a
+    // relative property. Strata does expose serialization and does accept the
+    // record you serialized for insert and delete. Splice will have to be
+    // updated to accept a buffer from its transform. We would have
 
-    // **TODO** Would really rather the nax be based on heft than based on
-    // count, but would mean exposing serialization, keeping it external, and
-    // furthermore keeping it in memory. What comes to mind at first is a b-tree
-    // that his held in memory so that each insert is actually written, the
-    // descent is synchronous and the insert or delete is synchronous, the
-    // writing takes place in the background.
-
-    // However, this is not really all that different from what we have now. The
-    // short buffers get backlogged one way or another, either here in memory or
-    // in the write queue. We have a write queue here. We're not keeping
-    // enormous amounts of entries in memory. We do want them to rotate out into
-    // amalgamation at some point. They go from our in-memory stages, which is a
-    // two-element queue, to the write queue of the b-tree, so I see no reason
-    // why we can't serialize before we write out.
+    // When we shift an new append array, we are no longer going to a candidate
+    // for merge, so we do it immediately, synchronously once we decide to
+    // merge.
 
     //
     _maybeMerge (mutation, max) {
@@ -839,11 +885,20 @@ class Mutator extends Transaction {
             for (const name in indices) {
                 indices[name].appends.unshift([])
             }
-            // TODO Really seems like a queue is appropriate.
-            this._destructible.ephemeral([ 'merge'].concat(mutation.qualifier), this._merge(mutation))
+            // **TODO** This is new.
+            mutation.series++
+            const key = Keyify.stringify([ 'merge', this._transaction.mutation.version, mutation.qualifier ])
+            const enqueue = this._memento._fracture.enqueue(key)
+            enqueue.value.merges.push({
+                transaction: this._transaction,
+                snapshot: this._snapshot,
+                mutation: mutation
+            })
+            this._futures.add(enqueue.future)
         }
         return null
     }
+    //
 
     // Remember that the `_index` is still needed even though we are replacing
     // the item in the in-memory on updates because you have two in-memory
@@ -858,7 +913,7 @@ class Mutator extends Transaction {
             version: compound[1],
             order: compound[2]
         }, record ]
-        const comparator = mutation.store.amalgamator.comparator.stage
+        const comparator = mutation.store.amalgamator.comparator.stage.key
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
         if (found) {
             array[index] = { key: compound, parts, value, join: null }
@@ -869,7 +924,7 @@ class Mutator extends Transaction {
 
     set (name, record) {
         const mutation = this._mutator(name)
-        const key = mutation.store.amalgamator.strata.extract([ record ])
+        const key = mutation.store.amalgamator.primary.storage.extractor([ record ])
         this._append(mutation, 'insert', key, record, record)
         for (const name in mutation.indices) {
             const index = mutation.indices[name]
@@ -895,7 +950,7 @@ class Mutator extends Transaction {
         this._append(this._mutator(name), 'remove', key, key, null)
     }
 
-    ___get (mutation, key) {
+    _getFromMemory (mutation, key) {
         const { amalgamator, comparator, getter } = mutation.store
         for (const array of mutation.appends) {
             const { index, found } = find2(getter, array, [ key ], 0, array.length - 1)
@@ -905,8 +960,8 @@ class Mutator extends Transaction {
         }
     }
 
-    __get (mutation, trampoline, key, consume) {
-        const got = this.___get(mutation, key)
+    _getIndex (mutation, trampoline, key, consume) {
+        const got = this._getFromMemory(mutation, key)
         if (got != null) {
             consume(got)
         } else {
@@ -928,19 +983,19 @@ class Mutator extends Transaction {
         }
     }
 
-    _get (name, trampoline, key, consume) {
+    _get (name, key, trampoline = new Trampoline, consume = value => trampoline.set(value)) {
         // **TODO** Maybe we have `_mutator` return based on store or index?
         const mutation = this._manipulation(name)
         if (Array.isArray(name)) {
-            this.__get(mutation, trampoline, key, got => {
-                if (got != null) {
-                    this._get(name[0], trampoline, key, consume)
+            this._getIndex(mutation, trampoline, key, item => {
+                if (item != null) {
+                    this._get(name[0], item.key[0].slice(mutation.store.keyLength), trampoline, consume)
                 } else {
-                    consume(got)
+                    consume(null)
                 }
             })
         } else {
-            const got = this.___get(mutation, key)
+            const got = this._getFromMemory(mutation, key)
             if (got != null) {
                 consume(got.parts[0].method == 'remove' ? null : got)
             } else {
@@ -948,66 +1003,92 @@ class Mutator extends Transaction {
             }
         }
     }
+    //
 
-    async commit () {
+    // We run maybe merge with a value of zero to force a merge and that merge
+    // could have nothing to merge, but we need to flush all the merges for all
+    // our mutations out of our work queue.
+
+    // If any of our merges are conflicted we rollback and return false.
+
+    // Otherwise we commit first to our write-ahead log and then to memory. The
+    // write-ahead log first because our application makes no decisions based on
+    // what is in the write-ahead log. Therefore don't have to think about race
+    // conditions because the in-memory commit is atomic and the application is
+    // only aware of the in-memory commit which happens after the logged commit.
+
+    //
+    async _commit () {
+        // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
-        do {
-            await this._destructible.drain()
-            for (const mutation of mutations) {
-                this._maybeMerge(mutation, 1)
-            }
-        } while (this._destructible.ephemerals != 0)
-        if (mutations.some(mutation => mutation.conflicted)) {
-            for (const mutation of mutations) {
-                mutation.mutator.rollback()
-            }
+        // Enqueue merges for each mutation.
+        for (const mutation of mutations) {
+            this._maybeMerge(mutation, 1)
+        }
+        // Wait for them all to finish merging.
+        await this._futures.join()
+        if (this._memento._rotator.locker.conflicted(this._transaction)) {
+            this._memento._rotator.locker.rollback(this._transaction)
             return false
         }
-        const trampoline = new Trampoline
-        const writes = {}
-        const version = this._transaction.mutation.version
-        this._memento._commits.search(trampoline, version, cursor => {
-            cursor.insert(cursor.index, version, [ version ], writes)
-        })
-        while (trampoline.seek()) {
-            await trampoline.shift()
-        }
-        await Strata.flush(writes)
-        // TODO Here goes your commit write *before* you call in-memory commit.
-        this._memento._locker.commit(this._transaction)
-        this._memento._locker.release(this._snapshot)
-        this._destructible.decrement()
-        this._destructible.decrement()
+        // Here is your logged commit.
+        await this._memento._rotator.commit(this._transaction.mutation.version).promise
+        // No more destructible decrementing, we're using Fracture now.
+        this._memento._rotator.locker.commit(this._transaction)
+        this._memento._rotator.locker.release(this._snapshot)
         return true
     }
+    //
 
+    // The user rollsback by calling this method which will raise an exception
+    // which is merely a symbol we catch. This will stop forwward progress it
+    // the user function, which may make for cleaner code. We throw a symbol to
+    // forgo the generation of a stack trace. `try`/`catch` is probably still
+    // expensive, but rollback is probably not a frequent operation.
+
+    //
     rollback () {
         throw ROLLBACK
     }
+    //
 
+    // Actual rollback still writes out all the mutations. Not sure why, though.
+    // Seems like it could surrender or just forget.
+
+    //
     async _rollback () {
+        // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
-        do {
-            await this._destructible.drain()
-            // **TODO** Why merge records you're just going to ignore?
-            for (const mutation of mutations) {
-                this._maybeMerge(mutation, 1)
-            }
-        } while (this._destructible.ephemerals != 0)
-        this._memento._locker.rollback(this._transaction)
-        this._memento._locker.release(this._snapshot)
-        this._destructible.decrement()
-        this._destructible.decrement()
+        // Enqueue merges for each mutation.
+        const futures = new Fracture.FutureSet
+        for (const mutation of mutations) {
+            this._maybeMerge(mutation, 0, futures)
+        }
+        // Wait for them all to finish merging.
+        await futures.join()
+        // Rollback in-memory, no commit logging of course.
+        this._memento._rotator.locker.rollback(this._transaction)
+        this._memento._rotator.locker.release(this._snapshot)
     }
 }
 
 const ASCENSION_TYPE = [ String, Number, BigInt ]
 
 class Schema extends Mutator {
-    constructor (journalist, memento, version) {
+    constructor (memento, version, options) {
         super(memento)
         this.version = version
-        this._journalist = journalist
+        this._operations = []
+        this._temporary = 0
+        this._stores = {}
+        this._options = options
+        this._indices = {}
+        for (const store in memento._stores) {
+            this._stores[store] = { existing: true, indices: {} }
+            for (const index in memento._stores[store]._indices) {
+                this._stores[store]._indices[index] = { existing: true }
+            }
+        }
     }
 
     _comparisons (extraction) {
@@ -1044,22 +1125,38 @@ class Schema extends Mutator {
 
     // TODO Need a rollback interface.
     async store (name, extraction) {
-        Memento.Error.assert(this._memento._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
-        const directory = (await this._journalist.mkdir(path.join('stores', name))).absolute
+        Memento.Error.assert(this._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
+        const qualifier = path.join('trash', `store.${this._temporary++}`)
         const comparisons = this._comparisons(extraction)
-        await fs.mkdir(path.join(directory, 'store'))
-        await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify(comparisons))
-        await this._memento._store(new Set, name, directory, true)
+        const directory = this._memento.directory
+        await fs.mkdir(path.join(directory, qualifier, 'tree'), { recursive: true })
+        await fs.mkdir(path.join(directory, qualifier, 'indices'), { recursive: true })
+        this._operations.push({ method: 'create', type: 'store', qualifier, name })
+        await fs.writeFile(path.join(directory, qualifier, 'key.json'), JSON.stringify(comparisons))
+        const store = await this._memento._store({
+            name: name,
+            qualifier: qualifier,
+            options: this._options,
+            create: true
+        })
     }
 
     async index (name, extraction, options = {}) {
         Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
         Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
-        const directory = (await this._journalist.mkdir(path.join('indices', name[0], name[1]))).absolute
+        const qualifier = path.join('trash', `index.${this._temporary++}`)
+        const directory = this._memento.directory
         const comparisons = this._comparisons(extraction)
-        await fs.mkdir(path.join(directory, 'store'))
-        await fs.writeFile(path.join(directory, 'key.json'), JSON.stringify({ comparisons, options }))
-        await this._memento._index(new Set, name, directory, true)
+        const store = this._memento._stores[name[0]]
+        await Memento.Error.resolve(fs.mkdir(path.join(directory, qualifier, 'tree'), { recursive: true }), 'IO_ERROR')
+        this._operations.push({ method: 'create', type: 'index', qualifier, name: name })
+        await fs.writeFile(path.join(directory, qualifier, 'key.json'), JSON.stringify({ comparisons, options }))
+        const index = await this._memento._index({
+            name: name,
+            qualifier: qualifier,
+            options: this._options,
+            create: true
+        })
     }
 
     // TODO Would need to close completely, then rename and reopen.
@@ -1069,19 +1166,15 @@ class Schema extends Mutator {
             Memento.Error.assert(this._memento._stores[from[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
             Memento.Error.assert(this._memento._stores[from[0]].indices[from[1]] != null, [ 'DOES_NOT_EXIST', 'index' ])
             Memento.Error.assert(this._memento._stores[to[0]].indices[to[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
-            const store = this._memento._stores[to[0]].indices[to[1]] =
-                this._memento._stores[from[0]].indices[from[1]]
+            this._memento._stores[to[0]].indices[to[1]] = this._memento._stores[from[0]].indices[from[1]]
             delete this._memento._stores[from[0]].indices[from[1]]
-            await this._journalist.rename(path.join('indices', from[0], from[1]), path.join('indices', to[0], to[1]))
+            this._operations.push({ method: 'rename', type: 'index', from, to })
         } else {
             Memento.Error.assert(this._memento._stores[from] != null, [ 'DOES_NOT_EXIST', 'store' ])
             Memento.Error.assert(this._memento._stores[to] == null, [ 'ALREADY_EXISTS', 'store' ])
-            const store = this._memento._stores[to] = this._memento._stores[from]
+            this._memento._stores[to] = this._memento._stores[from]
             delete this._memento._stores[from]
-            await this._journalist.rename(path.join('stores', from), path.join('stores', to))
-            for (const name in store.indices) {
-                await this._journalist.rename(path.join('indices', from, name), path.join('indices', to, name))
-            }
+            this._operations.push({ method: 'rename', type: 'store', from, to })
         }
     }
 
@@ -1095,174 +1188,248 @@ class Memento {
     static DSC = Symbol('decending')
 
     static Error = Interrupt.create('Memento.Error', {
+        IO_ERROR: 'i/o error',
         ALREADY_EXISTS: '%s already exists',
         DOES_NOT_EXIST: '%s does not exist',
         INVALID_RENAME: 'the stores for an index rename must be the same',
         ROLLBACK: 'transaction rolled back'
     })
 
-    constructor (options) {
-        this.destructible = options.destructible
-        this._destructible = null
-        this._stores = {}
-        this.cache = new Cache
-        this._versions = { '0': true }
-        this.directory = options.directory
-        this._locker = new Locker({ heft: coalesce(options.heft, 1024 * 1024) })
-        this._locker.on('amalgamated', (exclusive, inclusive) => {
-            this._destructible.commits.ephemeral('amalgamated', this._amalgamated(exclusive, inclusive))
+    constructor (destructible, options) {
+        this.destructible = destructible
+        this.deferrable = destructible.durable($ => $(), { countdown: 1 }, 'deferrable')
+        this.destructible.destruct(() => {
+            this.deferrable.decrement()
         })
-        const primary = coalesce(options.primary, {})
-        const stage = coalesce(options.stage, {})
-        const leaf = { stage: coalesce(stage.leaf, {}), primary: coalesce(primary.leaf, {}) }
-        const branch = { stage: coalesce(stage.branch, {}), primary: coalesce(primary.branch, {}) }
-        this._comparators = coalesce(options.comparators, {})
-        this._strata = {
-            stage: {
-                leaf: {
-                    split: coalesce(leaf.stage.split, 4096),
-                    merge: coalesce(leaf.stage.merge, 2048)
-                },
-                branch: {
-                    split: coalesce(branch.stage.split, 4096),
-                    merge: coalesce(branch.stage.merge, 2048)
-                }
-            },
-            primary: {
-                leaf: {
-                    split: coalesce(leaf.primary.split, 4096),
-                    merge: coalesce(leaf.primary.merge, 2048)
-                },
-                branch: {
-                    split: coalesce(branch.primary.split, 4096),
-                    merge: coalesce(branch.primary.merge, 2048)
-                }
-            }
+        this._destructible = {
+            amalgamators: this.destructible.durable($ => $(), 'amalgamators')
         }
-    }
-
-    static async open ({
-        destructible = new Destructible('memento'),
-        directory,
-        version = 1,
-        comparators = {}
-    } = {}, upgrade) {
-        const journalist = await Journalist.create(directory)
-        await Journalist.prepare(journalist)
-        await Journalist.commit(journalist)
-        await journalist.dispose()
-        const memento = new Memento({ destructible, directory, comparators })
-        const open = destructible.ephemeral('open')
-        memento._destructible = {
-            open: open,
-            amalgamators: open.durable('amalgamators'),
-            mutators: open.durable('mutators'),
-            commits: open.durable('collector')
-        }
-        memento._destructible.commits.increment()
-        open.destruct(() => {
-            // Destroying the amalgamators and mutators Destructible will
-            // prevent new stores, indices or mutations from being created.
-            memento._destructible.amalgamators.destroy()
-            memento._destructible.mutators.destroy()
-            // Wait for the mutations to drain, make a final rotation of the
-            // amagamators, then destroy all the amalgamators.
-            open.ephemeral('shutdown', async () => {
-                await memento._destructible.mutators.drain()
-                await memento._locker.drain()
-                await memento._locker.rotate()
-                for (const store in memento._stores) {
-                    memento._stores[store].destructible.decrement()
-                    for (const index in memento._stores[store].indices) {
-                        memento._stores[store].indices[index].destructible.decrement()
+        // **TODO** Need to wait for mutators and snapshots to complete before
+        // we completely decrement. Could we just increment and decrement
+        // deferrable to do that?
+        this.deferrable.destruct(() => {
+            this.deferrable.ephemeral($ => $(), 'shutdown', async () => {
+                await this._fracture.drain()
+                for (const store in this._stores) {
+                    this._stores[store].amalgamator.deferrable.decrement()
+                    for (const index in this._stores[store].indices) {
+                        this._stores[store].indices[index].amalgamator.deferrable.decrement()
                     }
                 }
-                await memento._destructible.commits.drain()
-                memento._destructible.commits.destroy()
+                this._fracture.deferrable.decrement()
             })
         })
-        const list = async () => {
-            try {
-                return await fs.readdir(memento.directory)
-            } catch (error) {
-                rescue(error, [{ code: 'ENOENT' }])
-                await fs.mdkir(memento.directory, { recursive: true })
-                return await list()
-            }
-        }
-        const subdirs = [ 'versions', 'stores', 'indices', 'commits' ].sort()
-        const dirs = await list()
-        const commits = {
-            directory: path.resolve(memento.directory, 'commits'),
-            cache: memento.cache,
-            comparator: (left, right) => left - right,
-            serializer: 'json',
-            create: dirs.length == 0
-        }
-        if (commits.create) {
-            for (const dir of subdirs) {
-                await fs.mkdir(path.resolve(memento.directory, dir))
-            }
-            await fs.mkdir(path.resolve(memento.directory, './versions/0'))
-            memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
-        } else {
-            memento._commits = await Strata.open(memento._destructible.commits.durable('strata'), commits)
-            const versions = new Set
-            const iterator = mvcc.riffle(memento._commits, Strata.MIN)
-            const trampoline = new Trampoline
-            while (! iterator.done) {
-                iterator.next(trampoline, items => {
-                    for (const item of items) {
-                        versions.add(item.parts[0])
-                    }
+        this._stores = {}
+        assert(options.pages)
+        this.pages = options.pages
+        const directory = this.directory = options.directory
+        this._rotator = options.rotator
+        this._comparators = coalesce(options.comparators, {})
+        this._fracture = new Fracture(destructible.durable($ => $(), 'merger'), {
+            turnstile: options.turnstile,
+            value: () => ({ merges: [] }),
+            worker: this._merge.bind()
+        })
+        this._fracture.deferrable.increment()
+        // **TODO** Amalgamator should share it's choose a branch leaf size logic.
+    }
+
+    static async _open (destructible, { directory, turnstile, version, comparators, options }) {
+        const writeahead = new WriteAhead(destructible.durable($ => $(), 'writeahead'), turnstile, await WriteAhead.open({ directory: path.resolve(directory, 'wal') }))
+        const rotator = new Rotator(destructible.durable($ => $(), 'rotator'), await Rotator.open(writeahead), { size: 1024 * 1024 / 4 })
+        const memento = new Memento(destructible, { turnstile, directory, rotator, comparators, pages: options.pages })
+        for (const dir of (await fs.readdir(path.join(directory, 'stores')))) {
+            const name = [ dir ]
+            await memento._store({
+                name: name[0],
+                qualifier: path.join('stores', name[0]),
+                options: options,
+                create: false
+            })
+            for (const dir of (await fs.readdir(path.join(directory, 'stores', name[0], 'indices')))) {
+                name[1] = dir
+                await memento._index({
+                    name: name,
+                    qualifier: path.join('stores', name[0], 'indices', name[1]),
+                    options: options,
+                    create: false
                 })
-                while (trampoline.seek()) {
-                    await trampoline.shift()
-                }
-            }
-            for (const store of (await fs.readdir(path.join(directory, 'stores')))) {
-                await memento._store(versions, store, path.join(directory, 'stores', store))
-            }
-            for (const store of (await fs.readdir(path.join(directory, 'indices')))) {
-                for (const index of (await fs.readdir(path.join(directory, 'indices', store)))) {
-                    await memento._index(versions, [ store, index ], path.join(directory, 'indices', store, index))
-                }
-            }
-        }
-        const versions = await fs.readdir(path.resolve(memento.directory, 'versions'))
-        const latest = versions.sort((left, right) => +left - +right).pop()
-        if (latest < version) {
-        }
-        if (latest < version && upgrade != null) {
-            const journalist = await Journalist.create(memento.directory)
-            const schema = new Schema(journalist, memento, version)
-            try {
-                await upgrade(schema)
-                await schema.commit()
-                await memento._destructible.open.destroy().rejected
-                await journalist.mkdir(path.join('versions', String(version)))
-                await journalist.write()
-                await Journalist.prepare(journalist)
-                await Journalist.commit(journalist)
-                await journalist.dispose()
-                return await Memento.open({
-                    destructible,
-                    directory,
-                    version,
-                    comparators
-                }, upgrade)
-            } catch (error) {
-                await schema._rollback()
-                if (error === ROLLBACK) {
-                    throw new Memento.Error('rollback')
-                }
-                throw error
             }
         }
         return memento
     }
 
-    async _amalgamated (exclusive, inclusive) {
+    static async open ({
+        destructible = new Destructible($ => $(), 'memento'),
+        turnstile = new Turnstile(destructible.durable($ => $(), { isolated: true }, 'turnstile x')),
+        directory,
+        version = 1,
+        comparators = {}
+    } = {}, upgrade) {
+        const journalist = await Journalist.create(directory)
+        if (journalist.messages.length != 0) {
+            await journalist.commit()
+        }
+        await journalist.dispose()
+        await fs.rmdir(path.join(directory, 'trash'), { recursive: true })
+        const list = async () => {
+            try {
+                return await fs.readdir(directory)
+            } catch (error) {
+                rescue(error, [{ code: 'ENOENT' }])
+                await fs.mdkir(directory, { recursive: true })
+                return await list()
+            }
+        }
+        const dirs = await list()
+        const subdirs = [ 'versions', 'stores', 'indices', 'wal', 'schema' ].sort()
+        if (dirs.length == 0) {
+            for (const dir of subdirs) {
+                await fs.mkdir(path.resolve(directory, dir))
+            }
+            await fs.mkdir(path.resolve(directory, './versions/0'))
+        }
+        const versions = (await fs.readdir(path.resolve(directory, 'versions'))).map(version => +version)
+        const latest = versions.sort((left, right) => left - right).pop()
+        const options = {
+            handles: new Operation.Cache(new Magazine),
+            turnstile: turnstile,
+            pages: new Magazine
+        }
+        if (latest < version) {
+            const memento = await Memento._open(destructible.ephemeral($ => $(), 'schema'), {
+                turnstile, directory, version, comparators, options
+            })
+            const schema = new Schema(memento, { target: version, current: latest }, options)
+            try {
+                await upgrade(schema)
+            } catch (error) {
+                console.log(error.stack)
+                console.log(schema._stores)
+                await schema._rollback()
+                await memento.destructible.destroy().promise
+                rescue(error, [ Symbol, ROLLBACK ])
+                throw new Memento.Error('ROLLBACK')
+            }
+            const journalist = await Journalist.create(directory)
+            // **TODO** New problem. Going to commit the the schema but that is
+            // a commit that we then follow up with a journalist operation which
+            // may or may not get prepared. So we can either...
+            //
+            // Log our operations to the write-ahead log. This means allowing
+            // Amalgamate commit to include user data in its commit message,
+            // which is strange, but we could do it.
+            //
+            // Defer commits until after a reopen of Amalgamate. We can
+            // basically hold onto the version of the mutator. Log it with
+            // journalist, then when we run the journal that is when we perform
+            // our rotations and commit. Somewhat better. Yeah, let's do that
+            // because we don't want to reimplement Journalist, and Amalgamate
+            // still has its hood up.
+            // await schema.commit()
+            for (const operation of schema._operations) {
+                switch (operation.method) {
+                case 'create': {
+                        const { type, qualifier, name } = operation
+                        if (type == 'store') {
+                            journalist.mkdir(path.join('stores', name))
+                            journalist.mkdir(path.join('stores', name, 'indices'))
+                            journalist.rename(path.join(qualifier, 'tree'), path.join('stores', name, 'tree'))
+                            journalist.rename(path.join(qualifier, 'key.json'), path.join('stores', name, 'key.json'))
+                        } else {
+                            journalist.rename(qualifier, path.join('stores', name[0], 'indices', name[1]))
+                        }
+                    }
+                    break
+                case 'rename': {
+                        const { type, from, to } = operation
+                        if (type == 'store') {
+                            journalist.rename(path.join('stores', from), path.join('stores', to))
+                        } else {
+                            journalist.rename(path.join('stores', from[0], 'indices', from[1]), path.join('stores', to[0], 'indices', to[1]))
+                        }
+                    }
+                    break
+                }
+            }
+            // **TODO** Save the version of the current schmea.
+            // **TODO** Actually run this as if it where a recovery.
+            await journalist.prepare()
+            await journalist.commit()
+            await journalist.dispose()
+            await options.handles.shrink(0)
+        }
+        return await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
+    }
+
+    // TODO Okay, so how do we say that any iterators should recalculate with a
+    // new `Amalgamate.iterator()`? Use a count.
+    async _merge ({ value: { merges } }) {
+        for (const { mutation, snapshot, transaction } of merges) {
+            assert(mutation.qualifier.length == 1)
+            // For indexes we use our Amalgamator map iterator to iterate over
+            // the snapshot we took using keys from the records in the in-memory
+            // stage. The in memory stage is already sorted so the map iterator
+            // should only ever have to visit any page once when iterating the
+            // snapshot. With that iterator, for each index, we extract the
+            // existing value from the snapshot iterator item and the new value
+            // from the in-memory array value. If it has changed we create a
+            // deletion record. You'll notice that we create the in-memory stage
+            // for the index here, in one go, in a one liner that prepends all
+            // the deletes to existing appends array.
+            if (Object.keys(mutation.indices).length != 0) {
+                const iterator = mutation.store.amalgamator.map(snapshot, mutation.appends[1], {
+                    extractor: entry => {
+                        return entry.key[0]
+                    }
+                })
+                const trampoline = new Trampoline
+                while (! iterator.done) {
+                    iterator.next(trampoline, entries => {
+                        for (const name in mutation.indices) {
+                            const deletions = []
+                            const { amalgamator, extractor, comparator, keyLength } = mutation.indices[name].store
+                            for (const entry of entries) {
+                                for (const item of entry.items) {
+                                    // **TODO** Why do I have to encase this in
+                                    // an array?
+                                    const previous = extractor([ item.parts[1] ])
+                                    if (entry.value.parts[0].method == 'delete' ||
+                                        comparator(extractor([ entry.value.value ]).slice(0, keyLength), previous.slice(0, keyLength)) != 0
+                                    ) {
+                                        deletions.push({
+                                            key: [ previous ],
+                                            parts: [{ method: 'remove' }, previous ]
+                                        })
+                                    }
+                                }
+                            }
+                            mutation.indices[name].appends[1] = deletions.concat(mutation.indices[name].appends[1])
+                        }
+                    })
+                    while (trampoline.seek()) {
+                        await trampoline.shift()
+                    }
+                }
+            }
+            // Now we can perform our merges. Because we are merging into the
+            // write-ahead only staging tree, we do not deal with any fractured
+            // procedures and do not displace ourselves (Fracture talk.) Nor do
+            // we wait on any Fracture futures.
+            await mutation.store.amalgamator.merge(transaction, mutation.appends[1])
+            const { indices } = mutation
+            for (const name in indices) {
+                await indices[name].store.amalgamator.merge(transaction, indices[name].appends[1])
+            }
+            mutation.appends.pop()
+            for (const name in indices) {
+                await indices[name].appends.pop()
+            }
+            mutation.series++
+        }
+    }
+
+    async _$_amalgamated (exclusive, inclusive) {
         const scope = { right: exclusive + 1 }, writes = {}
         const trampoline = new Trampoline
         while (scope.right != null) {
@@ -1284,8 +1451,10 @@ class Memento {
         await Strata.flush(writes)
     }
 
-    async _store (versions, name, directory, create = false) {
-        const comparisons = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
+    async _store ({ name, qualifier, create, options }) {
+        const directory = this.directory
+
+        const comparisons = JSON.parse(await fs.readFile(path.join(directory, qualifier, 'key.json'), 'utf8'))
 
         const extractors = comparisons.map(part => {
             return function (object) {
@@ -1303,45 +1472,40 @@ class Memento {
 
         const comparator = ascension(comparisons.map(part => {
             return [
-                typeof part.type == 'string'
-                    ? this._comparators[part.type]
-                    : ASCENSION_TYPE[part.type],
+                typeof part.type == 'string' ? this._comparators[part.type] : ASCENSION_TYPE[part.type],
                 part.direction
             ]
         }))
 
-        const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
-        destructible.increment()
-
-        const amalgamator = await Amalgamator.open(destructible, {
-            locker: this._locker,
-            directory: path.join(directory, 'store'),
-            cache: this.cache,
-            key: {
-                extract: extractor,
-                compare: comparator,
-                serialize: function (key) {
-                    return [ Buffer.from(JSON.stringify(key)) ]
+        const destructible = this._destructible.amalgamators.durable($ => $(), qualifier)
+        const amalgamator = await this._rotator.open(destructible, {
+            handles: options.handles.subordinate(),
+            directory: path.join(directory, qualifier, 'tree'),
+            create: create,
+            key: qualifier,
+            checksum: () => '0',
+            extractor: extractor,
+            // **TODO** Remove wrapper functions.
+            serializer: {
+                key: {
+                    serialize: function (key) { return Verbatim.serialize(key) },
+                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
                 },
-                deserialize: function (parts) {
-                    return JSON.parse(parts[0].toString())
+                parts: {
+                    serialize: function (parts) { return Verbatim.serialize(parts) },
+                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
                 }
-            },
-            parts: {
-                serialize: function (parts) {
-                    return [ Buffer.from(JSON.stringify(parts)) ]
-                },
-                deserialize: function (parts) {
-                    const foo = JSON.parse(parts[0].toString())
-                    return foo
-                }
-            },
+            }
+        }, {
+            pages: options.pages.subordinate(),
+            turnstile: options.turnstile,
+            comparator: comparator,
             transformer: function (operation) {
                 if (operation.parts[0].method == 'insert') {
                     return {
                         method: 'insert',
                         key: operation.key[0],
-                        parts: [ operation.parts[1] ]
+                        parts: [ operation.value ]
                     }
                 }
                 return {
@@ -1349,13 +1513,18 @@ class Memento {
                     key: operation.key[0]
                 }
             },
-            createIfMissing: create,
-            errorIfExists: create
+            primary: options.primary || {
+                leaf: { split: 256, merge: 32 },
+                branch: { split: 256, merge: 32 },
+            },
+            stage: options.stage || {
+                leaf: { split: 256, merge: 32 },
+                branch: { split: 256, merge: 32 },
+            }
         })
-
-        await amalgamator.recover(versions)
-
+        amalgamator.deferrable.increment()
         this._stores[name] = {
+            qualifier,
             destructible,
             amalgamator,
             indices: {},
@@ -1365,10 +1534,12 @@ class Memento {
         }
     }
 
-    async _index (versions, [ storeName, name ], directory, create = false) {
-        const key = JSON.parse(await fs.readFile(path.join(directory, 'key.json'), 'utf8'))
+    async _index ({ name, qualifier, create, options }) {
+        const directory = this.directory
 
-        const store = this._stores[storeName]
+        const store = this._stores[name[0]]
+
+        const key = JSON.parse(await fs.readFile(path.join(directory, qualifier, 'key.json'), 'utf8'))
 
         const comparisons = key.comparisons.concat(store.comparisons)
 
@@ -1395,31 +1566,29 @@ class Memento {
             ]
         }))
 
-        const destructible = this._destructible.amalgamators.ephemeral([ 'store', name ])
-        destructible.increment()
-
-        const amalgamator = await Amalgamator.open(destructible, {
-            locker: this._locker,
-            directory: path.join(directory, 'store'),
-            cache: this.cache,
-            key: {
-                compare: comparator,
-                extract: parts => parts[0],
-                serialize: function (key) {
-                    return [ Buffer.from(JSON.stringify(key)) ]
+        const destructible = this._destructible.amalgamators.durable($ => $(), qualifier)
+        const amalgamator = await this._rotator.open(destructible, {
+            handles: options.handles.subordinate(),
+            directory: path.join(directory, qualifier, 'tree'),
+            create: create,
+            key: qualifier,
+            checksum: () => '0',
+            extractor: extractor,
+            // **TODO** Remove wrapper functions.
+            serializer: {
+                key: {
+                    serialize: function (key) { return Verbatim.serialize(key) },
+                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
                 },
-                deserialize: function (parts) {
-                    return JSON.parse(parts[0].toString())
+                parts: {
+                    serialize: function (parts) { return Verbatim.serialize(parts) },
+                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
                 }
-            },
-            parts: {
-                serialize: function (parts) {
-                    return [ Buffer.from(JSON.stringify(parts)) ]
-                },
-                deserialize: function (parts) {
-                    return JSON.parse(parts[0].toString())
-                }
-            },
+            }
+        }, {
+            pages: options.pages.subordinate(),
+            turnstile: options.turnstile,
+            comparator: comparator,
             transformer: function (operation) {
                 if (operation.parts[0].method == 'insert') {
                     return {
@@ -1433,11 +1602,16 @@ class Memento {
                     key: operation.key[0]
                 }
             },
-            createIfMissing: create,
-            errorIfExists: create
+            primary: options.primary || {
+                leaf: { split: 256, merge: 32 },
+                branch: { split: 256, merge: 32 },
+            },
+            stage: options.stage || {
+                leaf: { split: 256, merge: 32 },
+                branch: { split: 256, merge: 32 },
+            }
         })
-
-        await amalgamator.recover(versions)
+        amalgamator.deferrable.increment()
 
         const partials = []
         for (let i = 1; i < key.comparisons.length; i++) {
@@ -1446,35 +1620,40 @@ class Memento {
             } (i))
         }
 
-        store.indices[name] = {
-            destructible, amalgamator, comparator, extractor,
-            keyLength: key.comparisons.length, partials,
+        this._stores[name[0]].indices[name[1]] = {
+            destructible, amalgamator, comparator, extractor, partials, qualifier,
+            keyLength: key.comparisons.length,
             getter: partials[key.comparisons.length - 2]
         }
     }
 
     async snapshot (block) {
+        this.deferrable.increment()
         const snapshot = new Snapshot(this)
         try {
             await block(snapshot)
         } finally {
             snapshot.release()
+            this.deferrable.decrement()
         }
     }
 
     async mutator (block) {
+        this.deferrable.increment()
         const mutator = new Mutator(this)
-        do {
-            try {
-                await block(mutator)
-            } catch (error) {
-                await mutator._rollback()
-                if (error === ROLLBACK) {
-                    return
+        try {
+            do {
+                try {
+                    await block(mutator)
+                } catch (error) {
+                    await mutator._rollback()
+                    rescue(error, [ Symbol, ROLLBACK ])
+                    break
                 }
-                throw error
-            }
-        } while (! await mutator.commit())
+            } while (! await mutator._commit())
+        } finally {
+            this.deferrable.decrement()
+        }
     }
 
     async close () {

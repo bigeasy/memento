@@ -34,10 +34,12 @@
                             "rescue":                       "7.0.0-alpha.9",
                             "riffle":                       "2.0.0-alpha.64",
                             "satiate":                      "0.0.2",
+                            "verbatim":                     "0.1.2",
                             "whittle":                      "0.0.1"
     },
     "devDependencies":
     {
+                            "perhaps":                      "0.0.6",
                             "proof":                        "^9.0.2"
     },
     "main":                 "memento",
