@@ -1,4 +1,4 @@
-require('proof')(35, async okay => {
+require('proof')(36, async okay => {
     const Future = require('perhaps')
     const Interrupt = require('interrupt')
 
@@ -153,7 +153,6 @@ require('proof')(35, async okay => {
             switch (schema.version.target) {
             case 1:
                 await schema.store('employee', { 'terms.0': Number })
-                console.log('there')
                 await schema.index([ 'employee', 'moniker' ], {
                     lastName: Memento.ASC, firstName: [ 'text' ]
                 })
@@ -486,8 +485,7 @@ require('proof')(35, async okay => {
                     presidents.reversed = true
                 }
             }
-            okay(gathered,
-            expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal snapshot')
+            okay(gathered, expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal snapshot')
         })
 
         try {
@@ -510,7 +508,6 @@ require('proof')(35, async okay => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
             })
-            return
             okay(gathered, expected, 'inner join stored')
         })
 

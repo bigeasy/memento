@@ -6,7 +6,7 @@
 //  * Store and index rename and delete are always tricky.
 //  * Inner iteration of mutators and why you're brilliant idea on how to make
 //  it simpler or more elegant is probably worthless.
-//  * Where joins are stored in memmory for mutators and how upsert and delete
+//  * Where joins are stored in memory for mutators and how upsert and delete
 //  makes them a particularly difficult.
 //  * Updating joins at commit is always a delete and insert operation.
 //  * Maps are generally unused and unexplored in applications, so there's a lot
@@ -1018,7 +1018,7 @@ class Mutator extends Transaction {
     // only aware of the in-memory commit which happens after the logged commit.
 
     //
-    async _commit () {
+    async _commit (persistent = true) {
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         // Enqueue merges for each mutation.
@@ -1032,7 +1032,9 @@ class Mutator extends Transaction {
             return false
         }
         // Here is your logged commit.
-        await this._memento._rotator.commit(this._transaction.mutation.version).promise
+        if (persistent) {
+            await this._memento._rotator.commit(this._transaction.mutation.version).promise
+        }
         // No more destructible decrementing, we're using Fracture now.
         this._memento._rotator.locker.commit(this._transaction)
         this._memento._rotator.locker.release(this._snapshot)
@@ -1126,7 +1128,7 @@ class Schema extends Mutator {
     // TODO Need a rollback interface.
     async store (name, extraction) {
         Memento.Error.assert(this._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
-        const qualifier = path.join('trash', `store.${this._temporary++}`)
+        const qualifier = path.join('staging', `store.${this._temporary++}`)
         const comparisons = this._comparisons(extraction)
         const directory = this._memento.directory
         await fs.mkdir(path.join(directory, qualifier, 'tree'), { recursive: true })
@@ -1144,7 +1146,7 @@ class Schema extends Mutator {
     async index (name, extraction, options = {}) {
         Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
         Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
-        const qualifier = path.join('trash', `index.${this._temporary++}`)
+        const qualifier = path.join('staging', `index.${this._temporary++}`)
         const directory = this._memento.directory
         const comparisons = this._comparisons(extraction)
         const store = this._memento._stores[name[0]]
@@ -1258,20 +1260,41 @@ class Memento {
         }
         return memento
     }
+    //
 
+    // Open runs the upgrade system. Version numbers are kept on the file system
+    // as directories in the versions directory. No other place to keep them.
+    // The write-ahead log is always rotating. It just doens't belong in any of
+    // the trees. Not sure what to do with users who delete just some of the
+    // stuff in their database directory. They used to be directories, but now
+    // they are just empty files so that no one decides to prune them.
+
+    // **TODO** Ensure that we rotate and rotate good to get all the temporary
+    // keys out of the write-ahead log when we run a schema upgrade.
+
+    //
     static async open ({
         destructible = new Destructible($ => $(), 'memento'),
-        turnstile = new Turnstile(destructible.durable($ => $(), { isolated: true }, 'turnstile x')),
+        turnstile = new Turnstile(destructible.durable($ => $(), { isolated: true }, 'turnstile')),
         directory,
         version = 1,
         comparators = {}
     } = {}, upgrade) {
+        // Run a recovery of a failed schema change, or any schema change since
+        // we always for schema changes into recovery to exercise the system.
         const journalist = await Journalist.create(directory)
-        if (journalist.messages.length != 0) {
+        const messages = journalist.messages.slice(0)
+        if (journalist.state == Journalist.COMMITTING) {
             await journalist.commit()
+        } else {
+            await journalist.dispose()
         }
-        await journalist.dispose()
-        await fs.rmdir(path.join(directory, 'trash'), { recursive: true })
+        // Now we can hold our breath and obliterate the temporary directory.
+        await fs.rmdir(path.join(directory, 'staging'), { recursive: true })
+        // We determine if this is a Memento directory by looking at the
+        // directory contents. It a strict match, but I won't know what to say
+        // to users who mess with the database directory until I meet them and
+        // hear what they have to say for themselves.
         const list = async () => {
             try {
                 return await fs.readdir(directory)
@@ -1282,20 +1305,38 @@ class Memento {
             }
         }
         const dirs = await list()
-        const subdirs = [ 'versions', 'stores', 'indices', 'wal', 'schema' ].sort()
+        const subdirs = [ 'stores', 'indices', 'wal', 'schema' ].sort()
         if (dirs.length == 0) {
             for (const dir of subdirs) {
                 await fs.mkdir(path.resolve(directory, dir))
             }
-            await fs.mkdir(path.resolve(directory, './versions/0'))
+            await fs.writeFile(path.resolve(directory, 'version.json'), JSON.stringify(0))
         }
-        const versions = (await fs.readdir(path.resolve(directory, 'versions'))).map(version => +version)
-        const latest = versions.sort((left, right) => left - right).pop()
+        // Versions are storesd as files and we use the file name to determine
+        // the most recent version of the database. We do something similar with
+        // Strata file-system storage to track instance, however if we where to
+        // lose those files, we could scan the directories to find the next
+        // instance. Here, if the user loses the instance we're not going to
+        // know what version of the database we're working with. It will still
+        // open, I suppose, but we won't know how to upgrade it, so all it not
+        // lost, it's just a programming task for the user to fish out their
+        // data into a new database. Any SQL database would be in a similar
+        // bind, possibly worse, if their schema tables where corrupted.
+        //
+        // Perhaps we ought to have a `version.json` and that will give the user
+        // pause before they decide to tidy it away.
+        const latest = JSON.parse(await Memento.Error.resolve(fs.readFile(path.join(directory, 'version.json'), 'utf8'), 'IO_ERROR'))
         const options = {
             handles: new Operation.Cache(new Magazine),
             turnstile: turnstile,
             pages: new Magazine
         }
+        // Schema upgrades use a mutator that has the creation, rename and
+        // delete functions. When we create a new store or index we create a new
+        // Amalgamator in a `staging` directory. If we rollback we can just
+        // delete the staging directory when we reopen. Otherwise, we suffle
+        // these files out of the `staging` directory and into their new homes
+        // in the `stores` and `indices` directory.
         if (latest < version) {
             const memento = await Memento._open(destructible.ephemeral($ => $(), 'schema'), {
                 turnstile, directory, version, comparators, options
@@ -1311,22 +1352,42 @@ class Memento {
                 rescue(error, [ Symbol, ROLLBACK ])
                 throw new Memento.Error('ROLLBACK')
             }
+            // Proceding with commit. We pass false to `Schema._commit` so that
+            // it does not write the version to the write-ahead log.
+            await schema._commit(false)
+
+            // We want to rotate the staging trees of the Amalgamators into
+            // their primary directory-based b-trees. This has to do with the
+            // fact that the relevant blocks in the write-ahead log for a
+            // paritcular Amalgamator are keyed on a key of our choosing and we
+            // chose that key based on the directory name in which the
+            // Amalgamator is stored. We're about to change that directory name
+            // so we clear out the write-ahead log so we don't lose anything
+            // with the rename.
+            await memento._rotator.locker.rotate().promise
+            //
+
+            // And one more time for good measure.
+            await memento._rotator.locker.rotate().promise
+            //
+
+            // Now we wait for the temporary Memento to shutdown which will
+            // flush the rotations.
+            await memento.destructible.destroy().promise
+            //
+
+            // Journalist is a utility that will perform a series of atomic file
+            // operations as part of a single atomic operation.
             const journalist = await Journalist.create(directory)
-            // **TODO** New problem. Going to commit the the schema but that is
-            // a commit that we then follow up with a journalist operation which
-            // may or may not get prepared. So we can either...
+            // We don't want to run an ordinary mutator commit. The file shuffle
+            // prepare could still fail. The upserts and deletes of the schema
+            // change should only take effect if we successfully prepare our
+            // file suffle.
             //
-            // Log our operations to the write-ahead log. This means allowing
-            // Amalgamate commit to include user data in its commit message,
-            // which is strange, but we could do it.
-            //
-            // Defer commits until after a reopen of Amalgamate. We can
-            // basically hold onto the version of the mutator. Log it with
-            // journalist, then when we run the journal that is when we perform
-            // our rotations and commit. Somewhat better. Yeah, let's do that
-            // because we don't want to reimplement Journalist, and Amalgamate
-            // still has its hood up.
-            // await schema.commit()
+            // We write the version for the schema as part of the atomic file
+            // suffle operation.
+            journalist.message(Buffer.from(JSON.stringify(schema._transaction.mutation.version)))
+            // We now move our temporary files into place.
             for (const operation of schema._operations) {
                 switch (operation.method) {
                 case 'create': {
@@ -1350,20 +1411,43 @@ class Memento {
                         }
                     }
                     break
+                // **TODO** `remove`.
                 }
             }
-            // **TODO** Save the version of the current schmea.
-            // **TODO** Actually run this as if it where a recovery.
+            //
+
+            // We create a new version file and we'll rotate it into place.
+            await fs.writeFile(path.join(directory, 'staging', 'version.json'), JSON.stringify(version))
+            journalist.unlink('version.json')
+            journalist.rename(path.join('staging', 'version.json'), 'version.json')
+            //
+
+            // We prepare our commit, but we then reopen the database so it gets
+            // run as a recovery as an exercise.
             await journalist.prepare()
-            await journalist.commit()
-            await journalist.dispose()
+            // **TODO** Belongs in Memento shutdown.
             await options.handles.shrink(0)
+            // **TODO** Here we call open again. The journal is run as if it
+            // where a recovery and the upgrade section is skipped because are
+            // up-to-date after the journal runs. (We should probably flag
+            // whether this is expected or not and warn the user that we
+            // recovered.)
+            return Memento.open({ destructible, turnstile, directory, version, comparators })
         }
-        return await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
+        const memento =  await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
+        if (journalist.messages.length) {
+            const version = JSON.parse(String(journalist.messages.shift()))
+            await memento._rotator.commit(version).promise
+            await journalist.dispose()
+        }
+        return memento
     }
+    //
 
     // TODO Okay, so how do we say that any iterators should recalculate with a
     // new `Amalgamate.iterator()`? Use a count.
+
+    //
     async _merge ({ value: { merges } }) {
         for (const { mutation, snapshot, transaction } of merges) {
             assert(mutation.qualifier.length == 1)
@@ -1573,7 +1657,7 @@ class Memento {
             create: create,
             key: qualifier,
             checksum: () => '0',
-            extractor: extractor,
+            extractor: parts => parts[0],
             // **TODO** Remove wrapper functions.
             serializer: {
                 key: {
