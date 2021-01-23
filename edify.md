@@ -14,7 +14,6 @@ A pure-JavaScript `async`/`await` indexed, persistant database.
 | Coverage:     | https://codecov.io/gh/bigeasy/memento         |
 | License:      | MIT                                           |
 
-
 Memento installs from NPM.
 
 ```text
@@ -29,7 +28,6 @@ and evicts pages from the cache when they reach a user specified memory limit.
 Memento is written in pure JavaScript.
 
 Memento provides a contemporary `async`/`await` interface.
-
 
 This `README.md` is also a unit test using the
 [Proof](https://github.com/bigeasy/proof) unit test framework. We'll use the

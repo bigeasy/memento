@@ -14,7 +14,6 @@
 // | Coverage:     | https://codecov.io/gh/bigeasy/memento         |
 // | License:      | MIT                                           |
 //
-//
 // Memento installs from NPM.
 
 // Memento is a database that supports atomic, isolated transactions, written to a
@@ -25,7 +24,6 @@
 // Memento is written in pure JavaScript.
 //
 // Memento provides a contemporary `async`/`await` interface.
-//
 //
 // This `README.md` is also a unit test using the
 // [Proof](https://github.com/bigeasy/proof) unit test framework. We'll use the
