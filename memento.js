@@ -133,7 +133,7 @@ class AmalgamatorIterator {
         this.done = false
         this.joins = joins
         this.joined = null
-        this.comparator = manipulation.store.amalgamator.comparator.stage
+        this.comparator = manipulation.store.amalgamator.comparator.stage.key
         this.trampoline = new Trampoline
     }
 
@@ -171,6 +171,7 @@ class AmalgamatorIterator {
             } else {
                 const { name, using } = this.joins[i]
                 const key = using(values)
+                keys.push(key)
                 this.transaction._get(name, key, trampoline, item => {
                     values.push(item == null ? null : item.parts[1])
                     trampoline.sync(() => join(i + 1))
@@ -387,7 +388,7 @@ class SnapshotIterator extends AmalgamatorIterator {
 class MutatorIterator extends AmalgamatorIterator {
     constructor (options) {
         super(options)
-        this.comparator = options.manipulation.store.amalgamator.comparator.stage
+        this.comparator = options.manipulation.store.amalgamator.comparator.stage.key
         this.trampoline = new Trampoline
     }
     //
@@ -503,7 +504,7 @@ class MutatorIterator extends AmalgamatorIterator {
                     appends
                 } = this.transaction._mutator(this.joins[0].name)
                 for (const array of appends) {
-                    const { index, found } = find(comparator, array, [ join.keys[i] ], 0, array.length - 1)
+                    const { index, found } = find(comparator.key, array, [ join.keys[i] ], 0, array.length - 1)
                     if (found) {
                         const hit = array[index]
                         join.values[i + 1] = hit.method == 'remove' ? null : hit.parts[1]
@@ -1345,8 +1346,6 @@ class Memento {
             try {
                 await upgrade(schema)
             } catch (error) {
-                console.log(error.stack)
-                console.log(schema._stores)
                 await schema._rollback()
                 await memento.destructible.destroy().promise
                 rescue(error, [ Symbol, ROLLBACK ])
@@ -1740,8 +1739,8 @@ class Memento {
         }
     }
 
-    async close () {
-        await this.destructible.destroy().rejected
+    close () {
+        return this.destructible.destroy().promise
     }
 }
 

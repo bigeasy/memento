@@ -1,4 +1,4 @@
-require('proof')(36, async okay => {
+require('proof')(45, async okay => {
     const Future = require('perhaps')
     const Interrupt = require('interrupt')
 
@@ -171,7 +171,7 @@ require('proof')(36, async okay => {
             }
         })
     }
-/*
+
     const errors = []
     try {
         await createMemento(1, true)
@@ -179,7 +179,7 @@ require('proof')(36, async okay => {
         errors.push(error.code)
     }
     okay(errors, [ 'ROLLBACK' ], 'rollback open')
-*/
+
     destructible.ephemeral('test', async function () {
         let memento = await createMemento()
 
@@ -488,11 +488,7 @@ require('proof')(36, async okay => {
             okay(gathered, expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal snapshot')
         })
 
-        try {
-            await memento.close()
-        } catch (error) {
-            console.log(error.stack)
-        }
+        await memento.close()
 
         memento = await createMemento(2)
 
@@ -510,9 +506,6 @@ require('proof')(36, async okay => {
             })
             okay(gathered, expected, 'inner join stored')
         })
-
-        destructible.destroy()
-        return
 
         await memento.mutator(async mutator => {
             const gathered = []
@@ -532,7 +525,7 @@ require('proof')(36, async okay => {
             gathered.length = 0
             select = mutator.forward('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
-                memento.cache.purge(0)
+                memento.pages.purge(0)
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
                 }
@@ -546,7 +539,7 @@ require('proof')(36, async okay => {
             gathered.length = 0
             select = mutator.forward('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
-                memento.cache.purge(0)
+                memento.pages.purge(0)
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
                 }
@@ -583,6 +576,8 @@ require('proof')(36, async okay => {
         })
 
         await memento.close()
+
+        destructible.destroy()
     })
 
     await destructible.promise
