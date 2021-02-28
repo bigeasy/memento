@@ -23,7 +23,7 @@ const assert = require('assert')
 
 const Destructible = require('destructible')
 const Trampoline = require('reciprocate')
-const Interrupt = require('interrupt')
+const { Interrupt } = require('interrupt')
 const Keyify = require('keyify')
 
 
@@ -41,7 +41,7 @@ const Verbatim = require('verbatim')
 
 const rescue = require('rescue')
 
-const coalesce = require('extant')
+const { coalesce } = require('extant')
 
 const ascension = require('ascension')
 const whittle = require('whittle')
