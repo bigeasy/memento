@@ -61,7 +61,7 @@ The `'memento'` module exports a single `Memento` object.
 
 ```javascript
 //{ "name": "displayedRequire", "mode": "text" }
-const Memento = require('avenue')
+const Memento = require('memento')
 ```
 
 ```javascript
