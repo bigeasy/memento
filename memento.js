@@ -1160,6 +1160,26 @@ class Schema extends Mutator {
             options: this._options,
             create: true
         })
+        const mutation = this._mutator(name[0])
+        const _index = mutation.indices[name[1]] = {
+            series: 1,
+            appends: [[]],
+            store: store.indices[name[1]],
+            qualifier: [ name[0], name[1] ]
+        }
+        // TODO This will be slow now, but I want to get it working. What I want
+        // to do is use the size of the returned items array to get sets as
+        // large as the largest page in the store and commit those in a chunk,
+        // but I don't believe that the slice size is forwarded to amalgamate
+        // yet.
+        for await (const items of this.forward(name[0])) {
+            const appends = []
+            for (const item of items) {
+                const key = _index.store.extractor([ item ])
+                appends.push({ key: [ key ], parts: [ { method: 'insert' }, key ] })
+            }
+            await _index.store.amalgamator.merge(this._transaction, appends)
+        }
     }
 
     // TODO Would need to close completely, then rename and reopen.

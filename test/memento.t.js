@@ -1,4 +1,6 @@
-require('proof')(47, async okay => {
+require('proof')(48, async okay => {
+    const assert = require('assert')
+
     const Future = require('perhaps')
     const Interrupt = require('interrupt')
 
@@ -164,6 +166,9 @@ require('proof')(47, async okay => {
                 for (const state of states) {
                     schema.set('state', state)
                 }
+                break
+            case 3:
+                await schema.index([ 'president', 'state' ], { state: String })
                 break
             }
             if (rollback) {
@@ -586,6 +591,21 @@ require('proof')(47, async okay => {
         })
 
         await memento.close()
+
+        memento = await createMemento(3)
+
+        await memento.snapshot(async snapshot => {
+            const lastNames = []
+            for await (const presidents of snapshot.forward([ 'president', 'state' ], [ 'VA' ])) {
+                for (const president of presidents) {
+                    assert.equal(president.state, 'VA')
+                    lastNames.push(president.lastName)
+                }
+            }
+            okay(lastNames, [
+                'Jefferson', 'Madison', 'Monroe', 'Harrison', 'Tyler', 'Taylor'
+            ], 'add index after store is populated')
+        })
 
         destructible.destroy()
     })
