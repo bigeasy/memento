@@ -21,7 +21,7 @@
     },
     "dependencies":
     {
-                            "amalgamate":                   "0.1.52",
+                            "amalgamate":                   "0.1.54",
                             "ascension":                    "^3.0.0-alpha.0",
                             "avenue":                       "0.6.13",
                             "b-tree":                       "2.0.0-alpha.95",
