@@ -1,4 +1,4 @@
-require('proof')(45, async okay => {
+require('proof')(47, async okay => {
     const Future = require('perhaps')
     const Interrupt = require('interrupt')
 
