@@ -50,8 +50,7 @@ const ROLLBACK = Symbol('rollback')
 
 const mvcc = {
     satiate: require('satiate'),
-    constrain: require('constrain/iterator'),
-    riffle: require('riffle')
+    constrain: require('constrain/iterator')
 }
 
 // **TODO** You should only need to keep one of these.
