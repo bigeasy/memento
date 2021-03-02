@@ -1477,12 +1477,12 @@ class Memento {
                                     // **TODO** Why do I have to encase this in
                                     // an array?
                                     const previous = extractor([ item.parts[1] ])
-                                    if (entry.value.parts[0].method == 'delete' ||
+                                    if (entry.value.parts[0].method == 'remove' ||
                                         comparator(extractor([ entry.value.value ]).slice(0, keyLength), previous.slice(0, keyLength)) != 0
                                     ) {
                                         deletions.push({
                                             key: [ previous ],
-                                            parts: [{ method: 'remove' }, previous ]
+                                            parts: [{ method: 'remove' }]
                                         })
                                     }
                                 }
@@ -1571,12 +1571,12 @@ class Memento {
             // **TODO** Remove wrapper functions.
             serializer: {
                 key: {
-                    serialize: function (key) { return Verbatim.serialize(key) },
-                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
+                    serialize: key => Verbatim.serialize(key),
+                    deserialize: parts => Verbatim.deserialize(parts)
                 },
                 parts: {
-                    serialize: function (parts) { return Verbatim.serialize(parts) },
-                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
+                    serialize: parts => Verbatim.serialize(parts),
+                    deserialize: parts => Verbatim.deserialize(parts)
                 }
             }
         }, {
@@ -1660,12 +1660,12 @@ class Memento {
             // **TODO** Remove wrapper functions.
             serializer: {
                 key: {
-                    serialize: function (key) { return Verbatim.serialize(key) },
-                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
+                    serialize: key => Verbatim.serialize(key),
+                    deserialize: parts => Verbatim.deserialize(parts)
                 },
                 parts: {
-                    serialize: function (parts) { return Verbatim.serialize(parts) },
-                    deserialize: function (parts) { return Verbatim.deserialize(parts) }
+                    serialize: parts => Verbatim.serialize(parts),
+                    deserialize: parts => Verbatim.deserialize(parts)
                 }
             }
         }, {

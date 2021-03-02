@@ -493,6 +493,7 @@ require('proof')(45, async okay => {
         memento = await createMemento(2)
 
         await memento.snapshot(async snapshot => {
+            await snapshot.get([ 'president', 'name' ], [ 'Adams', 'John' ])
             const gathered = []
             let select = snapshot.forward('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
@@ -573,6 +574,15 @@ require('proof')(45, async okay => {
 
         await memento.snapshot(async snapshot => {
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), null, 'item unset snapshot')
+        })
+
+        await memento.close()
+
+        memento = await createMemento(2)
+
+        await memento.mutator(async mutator => {
+            okay(await mutator.get('president', [ 1 ]), null, 'item unset reopened store')
+            okay(await mutator.get([ 'president', 'name' ], [ 'Washington', 'Fred' ]), null, 'item unset reopened index')
         })
 
         await memento.close()
