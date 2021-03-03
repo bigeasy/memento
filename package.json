@@ -1,6 +1,6 @@
 {
     "name":                 "memento",
-    "version":              "0.1.6",
+    "version":              "0.1.7",
     "description":
 
       "A Paxos backed replicated state machine key-value store.",
