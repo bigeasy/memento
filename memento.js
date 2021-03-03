@@ -1062,12 +1062,11 @@ class Mutator extends Transaction {
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         // Enqueue merges for each mutation.
-        const futures = new Fracture.FutureSet
         for (const mutation of mutations) {
-            this._maybeMerge(mutation, 0, futures)
+            this._maybeMerge(mutation, 0)
         }
         // Wait for them all to finish merging.
-        await futures.join()
+        await this._futures.join()
         // Rollback in-memory, no commit logging of course.
         this._memento._rotator.locker.rollback(this._transaction)
         this._memento._rotator.locker.release(this._snapshot)
@@ -1458,7 +1457,7 @@ class Memento {
     // new `Amalgamate.iterator()`? Use a count.
 
     //
-    async _merge ({ value: { merges } }) {
+    async _merge ({ displace, value: { merges } }) {
         for (const { mutation, snapshot, transaction } of merges) {
             assert(mutation.qualifier.length == 1)
             // For indexes we use our Amalgamator map iterator to iterate over
@@ -1510,14 +1509,14 @@ class Memento {
             // write-ahead only staging tree, we do not deal with any fractured
             // procedures and do not displace ourselves (Fracture talk.) Nor do
             // we wait on any Fracture futures.
-            await mutation.store.amalgamator.merge(transaction, mutation.appends[1])
+            await displace(mutation.store.amalgamator.merge(transaction, mutation.appends[1]))
             const { indices } = mutation
             for (const name in indices) {
-                await indices[name].store.amalgamator.merge(transaction, indices[name].appends[1])
+                await displace(indices[name].store.amalgamator.merge(transaction, indices[name].appends[1]))
             }
             mutation.appends.pop()
             for (const name in indices) {
-                await indices[name].appends.pop()
+                indices[name].appends.pop()
             }
             mutation.series++
         }
