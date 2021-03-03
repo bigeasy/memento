@@ -1220,32 +1220,16 @@ class Memento {
     constructor (destructible, options) {
         this.destructible = destructible
         this.deferrable = destructible.durable($ => $(), { countdown: 1 }, 'deferrable')
-        this.destructible.destruct(() => {
-            this.deferrable.decrement()
-        })
-        this._destructible = {
-            amalgamators: this.destructible.durable($ => $(), 'amalgamators')
-        }
+        this.destructible.destruct(() => this.deferrable.decrement())
         // **TODO** Need to wait for mutators and snapshots to complete before
         // we completely decrement. Could we just increment and decrement
         // deferrable to do that?
-        this.deferrable.destruct(() => {
-            this.deferrable.ephemeral($ => $(), 'shutdown', async () => {
-                await this._fracture.drain()
-                for (const store in this._stores) {
-                    this._stores[store].amalgamator.deferrable.decrement()
-                    for (const index in this._stores[store].indices) {
-                        this._stores[store].indices[index].amalgamator.deferrable.decrement()
-                    }
-                }
-                this._fracture.deferrable.decrement()
-            })
-        })
         this._stores = {}
         assert(options.pages)
         this.pages = options.pages
         const directory = this.directory = options.directory
         this._rotator = options.rotator
+        this._rotator.deferrable.increment()
         this._comparators = coalesce(options.comparators, {})
         this._fracture = new Fracture(destructible.durable($ => $(), 'merger'), {
             turnstile: options.turnstile,
@@ -1253,6 +1237,14 @@ class Memento {
             worker: this._merge.bind()
         })
         this._fracture.deferrable.increment()
+        this.deferrable.destruct(() => {
+            this.deferrable.ephemeral($ => $(), 'shutdown', async () => {
+                if (this._fracture)
+                await this._fracture.drain()
+                this._fracture.deferrable.decrement()
+                this._rotator.deferrable.decrement()
+            })
+        })
         // **TODO** Amalgamator should share it's choose a branch leaf size logic.
     }
 
@@ -1579,8 +1571,7 @@ class Memento {
             ]
         }))
 
-        const destructible = this._destructible.amalgamators.durable($ => $(), qualifier)
-        const amalgamator = await this._rotator.open(destructible, {
+        const amalgamator = await this._rotator.open(qualifier, {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
@@ -1624,10 +1615,8 @@ class Memento {
                 branch: { split: 256, merge: 32 },
             }
         })
-        amalgamator.deferrable.increment()
         this._stores[name] = {
             qualifier,
-            destructible,
             amalgamator,
             indices: {},
             comparisons,
@@ -1668,8 +1657,7 @@ class Memento {
             ]
         }))
 
-        const destructible = this._destructible.amalgamators.durable($ => $(), qualifier)
-        const amalgamator = await this._rotator.open(destructible, {
+        const amalgamator = await this._rotator.open(qualifier, {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
@@ -1713,7 +1701,6 @@ class Memento {
                 branch: { split: 256, merge: 32 },
             }
         })
-        amalgamator.deferrable.increment()
 
         const partials = []
         for (let i = 1; i < key.comparisons.length; i++) {
@@ -1723,7 +1710,7 @@ class Memento {
         }
 
         this._stores[name[0]].indices[name[1]] = {
-            destructible, amalgamator, comparator, extractor, partials, qualifier,
+            amalgamator, comparator, extractor, partials, qualifier,
             keyLength: key.comparisons.length,
             getter: partials[key.comparisons.length - 2]
         }
