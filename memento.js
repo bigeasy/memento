@@ -1571,7 +1571,7 @@ class Memento {
             ]
         }))
 
-        const amalgamator = await this._rotator.open(qualifier, {
+        const amalgamator = await this._rotator.open(qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
@@ -1657,7 +1657,7 @@ class Memento {
             ]
         }))
 
-        const amalgamator = await this._rotator.open(qualifier, {
+        const amalgamator = await this._rotator.open(qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
