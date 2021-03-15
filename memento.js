@@ -23,7 +23,7 @@ const assert = require('assert')
 
 const Destructible = require('destructible')
 const Trampoline = require('reciprocate')
-const { Interrupt } = require('interrupt')
+const Interrupt = require('interrupt')
 const Keyify = require('keyify')
 
 
@@ -821,7 +821,7 @@ class Mutator extends Transaction {
         this._mutations = {}
         this._index = 0
         this._references = []
-        this._futures = new Fracture.FutureSet
+        this._promises = new Set
     }
     //
 
@@ -877,7 +877,8 @@ class Mutator extends Transaction {
     // merge.
 
     //
-    _maybeMerge (mutation, max) {
+    _maybeMerge (stack, mutation, max) {
+        assert(stack instanceof Fracture.Stack)
         const { appends } = mutation
         if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
@@ -888,13 +889,13 @@ class Mutator extends Transaction {
             // **TODO** This is new.
             mutation.series++
             const key = Keyify.stringify([ 'merge', this._transaction.mutation.version, mutation.qualifier ])
-            const enqueue = this._memento._fracture.enqueue(key)
-            enqueue.value.merges.push({
-                transaction: this._transaction,
-                snapshot: this._snapshot,
-                mutation: mutation
-            })
-            this._futures.add(enqueue.future)
+            this._promises.add(this._memento._fracture.enqueue(stack, key, value => {
+                value.merges.push({
+                    transaction: this._transaction,
+                    snapshot: this._snapshot,
+                    mutation: mutation
+                })
+            }))
         }
         return null
     }
@@ -931,7 +932,7 @@ class Mutator extends Transaction {
             const key = index.store.extractor([ record ])
             this._append(index, 'insert', key, key, record)
         }
-        this._maybeMerge(mutation, 1024)
+        this._maybeMerge(Fracture.stack(), mutation, 1024)
     }
 
     // **NOTE**: We don't unset the index record. We just accept that when we
@@ -1019,21 +1020,25 @@ class Mutator extends Transaction {
 
     //
     async _commit (persistent = true) {
+        const stack = Fracture.stack()
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         // Enqueue merges for each mutation.
         for (const mutation of mutations) {
-            this._maybeMerge(mutation, 1)
+            this._maybeMerge(stack, mutation, 1)
         }
         // Wait for them all to finish merging.
-        await this._futures.join()
+        for (const promise of this._promises) {
+            await promise
+            this._promises.delete(promise)
+        }
         if (this._memento._rotator.locker.conflicted(this._transaction)) {
             this._memento._rotator.locker.rollback(this._transaction)
             return false
         }
         // Here is your logged commit.
         if (persistent) {
-            await this._memento._rotator.commit(this._transaction.mutation.version).promise
+            await this._memento._rotator.commit(stack, this._transaction.mutation.version)
         }
         // No more destructible decrementing, we're using Fracture now.
         this._memento._rotator.locker.commit(this._transaction)
@@ -1059,14 +1064,18 @@ class Mutator extends Transaction {
 
     //
     async _rollback () {
+        const stack = Fracture.stack()
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
         // Enqueue merges for each mutation.
         for (const mutation of mutations) {
-            this._maybeMerge(mutation, 0)
+            this._maybeMerge(stack, mutation, 0)
         }
         // Wait for them all to finish merging.
-        await this._futures.join()
+        for (const promise of this._promises) {
+            await promise
+            this._promises.delete(promise)
+        }
         // Rollback in-memory, no commit logging of course.
         this._memento._rotator.locker.rollback(this._transaction)
         this._memento._rotator.locker.release(this._snapshot)
@@ -1176,7 +1185,7 @@ class Schema extends Mutator {
                 const key = _index.store.extractor([ item ])
                 appends.push({ key: [ key ], parts: [ { method: 'insert' }, key ] })
             }
-            await _index.store.amalgamator.merge(this._transaction, appends)
+            await _index.store.amalgamator.merge(Fracture.stack(), this._transaction, appends)
         }
     }
 
@@ -1446,7 +1455,7 @@ class Memento {
         const memento =  await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
         if (journalist.messages.length) {
             const version = JSON.parse(String(journalist.messages.shift()))
-            await memento._rotator.commit(version).promise
+            await memento._rotator.commit(Fracture.stack(), version)
             await journalist.dispose()
         }
         return memento
@@ -1457,7 +1466,7 @@ class Memento {
     // new `Amalgamate.iterator()`? Use a count.
 
     //
-    async _merge ({ displace, value: { merges } }) {
+    async _merge ({ stack, value: { merges } }) {
         for (const { mutation, snapshot, transaction } of merges) {
             assert(mutation.qualifier.length == 1)
             // For indexes we use our Amalgamator map iterator to iterate over
@@ -1509,10 +1518,10 @@ class Memento {
             // write-ahead only staging tree, we do not deal with any fractured
             // procedures and do not displace ourselves (Fracture talk.) Nor do
             // we wait on any Fracture futures.
-            await displace(mutation.store.amalgamator.merge(transaction, mutation.appends[1]))
+            await mutation.store.amalgamator.merge(stack, transaction, mutation.appends[1])
             const { indices } = mutation
             for (const name in indices) {
-                await displace(indices[name].store.amalgamator.merge(transaction, indices[name].appends[1]))
+                await indices[name].store.amalgamator.merge(stack, transaction, indices[name].appends[1])
             }
             mutation.appends.pop()
             for (const name in indices) {
@@ -1570,7 +1579,7 @@ class Memento {
             ]
         }))
 
-        const amalgamator = await this._rotator.open(qualifier.replace('/', '.'), {
+        const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
@@ -1656,7 +1665,7 @@ class Memento {
             ]
         }))
 
-        const amalgamator = await this._rotator.open(qualifier.replace('/', '.'), {
+        const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
             directory: path.join(directory, qualifier, 'tree'),
             create: create,
