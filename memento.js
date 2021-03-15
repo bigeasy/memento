@@ -587,6 +587,7 @@ class Transaction {
     }
 
     _iterator (name, vargs, direction) {
+        this._memento.pages.purge(this._cacheSize)
         if (Array.isArray(name)) {
             const manipulation = this._manipulation(name)
             return new IteratorBuilder({
@@ -597,6 +598,7 @@ class Transaction {
                 key: vargs.length == 0 ? null : vargs.shift(),
                 incluslive: vargs.length == 0 ? true : vargs.shift(),
                 converter: (trampoline, items, consume) => {
+                    this._memento.pages.purge(this._cacheSize)
                     const converted = []
                     let i = 0
                     const get = () => {
@@ -626,6 +628,7 @@ class Transaction {
             key: null,
             incluslive: true,
             converter: (trampoline, items, consume) => {
+                this._memento.pages.purge(this._cacheSize)
                 consume(items.map(item => {
                     return { key: item.key, value: item.parts[1], join: [] }
                 }))
@@ -716,6 +719,7 @@ class Transaction {
     }
 
     get (name, key, trampoline = new Trampoline, consume = value => trampoline.set(value)) {
+        this._memento.pages.purge(this._cacheSize)
         this._get(name, key, trampoline, item => {
             consume(item == null ? null : item.parts[1])
         })
@@ -1235,6 +1239,7 @@ class Memento {
         this._stores = {}
         assert(options.pages)
         this.pages = options.pages
+        this._cacheSize = 1024 * 1024 * 256
         const directory = this.directory = options.directory
         this._rotator = options.rotator
         this._rotator.deferrable.increment()
