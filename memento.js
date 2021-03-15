@@ -1440,6 +1440,7 @@ class Memento {
             //
 
             // We create a new version file and we'll rotate it into place.
+            await fs.mkdir(path.join(directory, 'staging'), { recursive: true })
             await fs.writeFile(path.join(directory, 'staging', 'version.json'), JSON.stringify(version))
             journalist.unlink('version.json')
             journalist.rename(path.join('staging', 'version.json'), 'version.json')
