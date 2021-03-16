@@ -1094,15 +1094,8 @@ class Schema extends Mutator {
         this.version = version
         this._operations = []
         this._temporary = 0
-        this._stores = {}
         this._options = options
         this._indices = {}
-        for (const store in memento._stores) {
-            this._stores[store] = { existing: true, indices: {} }
-            for (const index in memento._stores[store]._indices) {
-                this._stores[store]._indices[index] = { existing: true }
-            }
-        }
     }
 
     _comparisons (extraction) {
@@ -1139,7 +1132,7 @@ class Schema extends Mutator {
 
     // TODO Need a rollback interface.
     async store (name, extraction) {
-        Memento.Error.assert(this._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
+        Memento.Error.assert(this._memento._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
         const qualifier = path.join('staging', `store.${this._temporary++}`)
         const comparisons = this._comparisons(extraction)
         const directory = this._memento.directory
