@@ -609,11 +609,11 @@ require('proof')(50, async okay => {
 
         okay((await memento.snapshot(async snapshot => {
             return snapshot.get('president', [ 2 ])
-        })).lastName, 'Jefferson')
+        })).lastName, 'Adams', 'snapshot return')
 
         okay((await memento.mutator(async mutator => {
             return mutator.get('president', [ 2 ])
-        })).lastName, 'Jefferson')
+        })).lastName, 'Adams', 'mutator return')
 
         destructible.destroy()
     })
