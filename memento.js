@@ -1727,7 +1727,7 @@ class Memento {
         this.deferrable.increment()
         const snapshot = new Snapshot(this)
         try {
-            await block(snapshot)
+            return await block(snapshot)
         } finally {
             snapshot.release()
             this.deferrable.decrement()
@@ -1737,10 +1737,11 @@ class Memento {
     async mutator (block) {
         this.deferrable.increment()
         const mutator = new Mutator(this)
+        let result
         try {
             do {
                 try {
-                    await block(mutator)
+                    result = await block(mutator)
                 } catch (error) {
                     await mutator._rollback()
                     rescue(error, [ Symbol, ROLLBACK ])
@@ -1750,6 +1751,7 @@ class Memento {
         } finally {
             this.deferrable.decrement()
         }
+        return result
     }
 
     close () {

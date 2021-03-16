@@ -1,4 +1,4 @@
-require('proof')(48, async okay => {
+require('proof')(50, async okay => {
     const assert = require('assert')
 
     const Future = require('perhaps')
@@ -606,6 +606,14 @@ require('proof')(48, async okay => {
                 'Jefferson', 'Madison', 'Monroe', 'Harrison', 'Tyler', 'Taylor'
             ], 'add index after store is populated')
         })
+
+        okay((await memento.snapshot(async snapshot => {
+            return snapshot.get('president', [ 2 ])
+        })).lastName, 'Jefferson')
+
+        okay((await memento.mutator(async mutator => {
+            return mutator.get('president', [ 2 ])
+        })).lastName, 'Jefferson')
 
         destructible.destroy()
     })
