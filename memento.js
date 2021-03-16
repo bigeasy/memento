@@ -1206,6 +1206,18 @@ class Schema extends Mutator {
     }
 
     async remove (name) {
+        if (Array.isArray(name)) {
+            Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
+            Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] != null, [ 'DOES_NOT_EXIST', 'index' ])
+            const qualifier = path.join('staging', `index.${this._temporary++}`)
+            this._operations.push({ method: 'remove', type: 'index', name, qualifier })
+            delete this._memento._stores[name]
+        } else {
+            Memento.Error.assert(this._memento._stores[name] != null, [ 'DOES_NOT_EXIST', 'store' ])
+            const qualifier = path.join('staging', `store.${this._temporary++}`)
+            this._operations.push({ method: 'remove', type: 'store', name, qualifier })
+            delete this._memento._stores[name]
+        }
     }
 }
 
@@ -1428,6 +1440,15 @@ class Memento {
                     }
                     break
                 // **TODO** `remove`.
+                case 'remove': {
+                        const { type, name, qualifier } = operation
+                        if (type == 'store') {
+                            journalist.rename(path.join('stores', name), qualifier)
+                        } else {
+                            journalist.rename(path.join('stores', name[0], 'indices', name[1]), qualifier)
+                        }
+                    }
+                    break
                 }
             }
             //
@@ -1459,6 +1480,11 @@ class Memento {
         }
         return memento
     }
+
+    indices (name) {
+        return Object.keys(this._stores[name].indices)
+    }
+
     //
 
     // TODO Okay, so how do we say that any iterators should recalculate with a
@@ -1528,28 +1554,6 @@ class Memento {
             }
             mutation.series++
         }
-    }
-
-    async _$_amalgamated (exclusive, inclusive) {
-        const scope = { right: exclusive + 1 }, writes = {}
-        const trampoline = new Trampoline
-        while (scope.right != null) {
-            this._commits.search(trampoline, scope.right, cursor => {
-                const i = cursor.index
-                while (i < cursor.page.items.length) {
-                    if (cursor.page.items[i].key > inclusive ) {
-                        scope.right = null
-                        return
-                    }
-                    cursor.remove(i, writes)
-                }
-                scope.right = cursor.page.right
-            })
-            while (trampoline.seek()) {
-                await trampoline.shift()
-            }
-        }
-        await Strata.flush(writes)
     }
 
     async _store ({ name, qualifier, create, options }) {

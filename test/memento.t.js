@@ -1,4 +1,4 @@
-require('proof')(50, async okay => {
+require('proof')(52, async okay => {
     const assert = require('assert')
 
     const Future = require('perhaps')
@@ -169,6 +169,9 @@ require('proof')(50, async okay => {
                 break
             case 3:
                 await schema.index([ 'president', 'state' ], { state: String })
+                break
+            case 4:
+                await schema.remove([ 'president', 'state' ])
                 break
             }
             if (rollback) {
@@ -614,6 +617,14 @@ require('proof')(50, async okay => {
         okay((await memento.mutator(async mutator => {
             return mutator.get('president', [ 2 ])
         })).lastName, 'Adams', 'mutator return')
+
+        okay(memento.indices('president').sort(), [ 'name', 'state' ], 'has state index')
+
+        await memento.close()
+
+        memento = await createMemento(4)
+        okay(memento.indices('president'), [ 'name' ], 'remove state index')
+        await memento.close()
 
         destructible.destroy()
     })
