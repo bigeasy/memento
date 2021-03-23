@@ -1051,7 +1051,7 @@ class Mutator extends Transaction {
     }
     //
 
-    // The user rollsback by calling this method which will raise an exception
+    // The user rolls back by calling this method which will raise an exception
     // which is merely a symbol we catch. This will stop forwward progress it
     // the user function, which may make for cleaner code. We throw a symbol to
     // forgo the generation of a stack trace. `try`/`catch` is probably still
@@ -1342,7 +1342,7 @@ class Memento {
             }
             await fs.writeFile(path.resolve(directory, 'version.json'), JSON.stringify(0))
         }
-        // Versions are storesd as files and we use the file name to determine
+        // Versions are stored as files and we use the file name to determine
         // the most recent version of the database. We do something similar with
         // Strata file-system storage to track instance, however if we where to
         // lose those files, we could scan the directories to find the next
@@ -1382,6 +1382,7 @@ class Memento {
             }
             // Proceding with commit. We pass false to `Schema._commit` so that
             // it does not write the version to the write-ahead log.
+            // TODO Why?
             await schema._commit(false)
 
             // We want to rotate the staging trees of the Amalgamators into
@@ -1439,7 +1440,6 @@ class Memento {
                         }
                     }
                     break
-                // **TODO** `remove`.
                 case 'remove': {
                         const { type, name, qualifier } = operation
                         if (type == 'store') {
@@ -1472,7 +1472,7 @@ class Memento {
             // recovered.)
             return Memento.open({ destructible, turnstile, directory, version, comparators })
         }
-        const memento =  await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
+        const memento = await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
         if (journalist.messages.length) {
             const version = JSON.parse(String(journalist.messages.shift()))
             await memento._rotator.commit(Fracture.stack(), version)
