@@ -1,7 +1,7 @@
 require('proof')(52, async okay => {
     const assert = require('assert')
 
-    const Future = require('perhaps')
+    const { Future } = require('perhaps')
     const Interrupt = require('interrupt')
 
     const presidents = function () {
