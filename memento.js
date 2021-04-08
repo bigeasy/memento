@@ -586,8 +586,7 @@ class Transaction {
         this._transaction = transaction
     }
 
-    _iterator (name, vargs, direction) {
-        this._memento.pages.purge(this._cacheSize)
+    __iterator (name, args, direction) {
         if (Array.isArray(name)) {
             const manipulation = this._manipulation(name)
             return new IteratorBuilder({
@@ -595,8 +594,8 @@ class Transaction {
                 transaction: this,
                 manipulation: manipulation,
                 direction: direction,
-                key: vargs.length == 0 ? null : vargs.shift(),
-                incluslive: vargs.length == 0 ? true : vargs.shift(),
+                key: args.key,
+                inclusive: args.inclusive,
                 converter: (trampoline, items, consume) => {
                     this._memento.pages.purge(this._cacheSize)
                     const converted = []
@@ -625,8 +624,8 @@ class Transaction {
             transaction: this,
             manipulation: this._manipulation(name),
             direction: direction,
-            key: null,
-            incluslive: true,
+            key: args.key,
+            incluslive: args.inclusive,
             converter: (trampoline, items, consume) => {
                 this._memento.pages.purge(this._cacheSize)
                 consume(items.map(item => {
@@ -634,6 +633,45 @@ class Transaction {
                 }))
             }
         })
+    }
+
+    _iterator (name, vargs, direction) {
+        this._memento.pages.purge(this._cacheSize)
+        vargs.reverse()
+        const args = { inclusive: true, key: null, filters: [], slurp: null }
+        while (vargs.length != 0) {
+            const varg = vargs.shift()
+            switch (typeof varg) {
+            case 'boolean':
+                args.includsive = varg
+                break
+            case 'function':
+                args.filters.push(varg)
+                break
+            case 'object':
+                assert(Array.isArray(varg))
+                if (varg.length == 0) {
+                    args.slurp = varg
+                } else {
+                    args.key = varg
+                }
+            }
+        }
+        const iterator = this.__iterator(name, args, direction)
+        if (args.slurp) {
+            return async function () {
+                const slurp = []
+                for await (const items of iterator) {
+                    for (const item of items) {
+                        if (args.filters.every(filter => filter(item))) {
+                            slurp.push(item)
+                        }
+                    }
+                }
+                return slurp
+            } ()
+        }
+        return iterator
     }
 
     map (name, set, { extractor = $ => $ } = {}) {

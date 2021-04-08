@@ -1,4 +1,4 @@
-require('proof')(52, async okay => {
+require('proof')(58, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
@@ -219,11 +219,21 @@ require('proof')(52, async okay => {
 
             okay(gathered, [], 'snapshot store empty')
 
+            {
+                const slurp = await snapshot.forward('president', [])
+                okay(slurp, [], 'snapshot slurp empty')
+            }
+
             gathered.length = 0
             for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
+            }
+
+            {
+                const slurp = await snapshot.forward([ 'president', 'name' ], [])
+                okay(slurp, [], 'snapshot index slurp empty')
             }
 
             okay(gathered, [], 'snapshot index empty')
@@ -247,6 +257,11 @@ require('proof')(52, async okay => {
 
             okay(gathered, presidents.slice(0, 1), 'local forward')
 
+            {
+                const slurp = await mutator.forward('president', [])
+                okay(slurp, presidents.slice(0, 1), 'local slurp forward')
+            }
+
             gathered.length = 0
             for await (const presidents of mutator.reverse('president')) {
                 for (const president of presidents) {
@@ -255,6 +270,11 @@ require('proof')(52, async okay => {
             }
 
             okay(gathered, presidents.slice(0, 1), 'local reverse')
+
+            {
+                const slurp = await mutator.reverse('president', [])
+                okay(slurp, presidents.slice(0, 1), 'local slurp reverse')
+            }
 
             gathered.length = 0
             for await (const employees of mutator.forward([ 'president', 'name' ])) {
@@ -265,6 +285,11 @@ require('proof')(52, async okay => {
 
             okay(gathered, presidents.slice(0, 1), 'local index forward')
 
+            {
+                const slurp = await mutator.forward([ 'president', 'name' ], [])
+                okay(slurp, presidents.slice(0, 1), 'local slurp index forward')
+            }
+
             gathered.length = 0
             for await (const employees of mutator.reverse([ 'president', 'name' ])) {
                 for (const employee of employees) {
@@ -273,6 +298,11 @@ require('proof')(52, async okay => {
             }
 
             okay(gathered, presidents.slice(0, 1), 'local index reverse')
+
+            {
+                const slurp = await mutator.reverse([ 'president', 'name' ], [])
+                okay(slurp, presidents.slice(0, 1), 'local slurp index reverse')
+            }
         })
 
         future.resolve()
