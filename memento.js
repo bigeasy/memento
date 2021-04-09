@@ -638,12 +638,15 @@ class Transaction {
     _iterator (name, vargs, direction) {
         this._memento.pages.purge(this._cacheSize)
         vargs.reverse()
-        const args = { inclusive: true, key: null, filters: [], slurp: null }
+        const args = { inclusive: true, key: null, filters: [], slurp: null, limit: -1 }
         while (vargs.length != 0) {
             const varg = vargs.shift()
             switch (typeof varg) {
             case 'boolean':
-                args.includsive = varg
+                args.inclusive = varg
+                break
+            case 'number':
+                args.limit = varg
                 break
             case 'function':
                 args.filters.push(varg)
@@ -1271,6 +1274,33 @@ class Memento {
         INVALID_RENAME: 'the stores for an index rename must be the same',
         ROLLBACK: 'transaction rolled back'
     })
+
+    // Going to step back back from syntax bashing until I've actually put a
+    // feature like joins to use. Instead I'll have some static functions that
+    // implement the features I want, because I'm considering interpretations
+    // that do not account for joins. Ultimately, we are going to want to apply
+    // limits and filters prior to applying joins, though.
+
+    //
+    static async slurp (iterator) {
+        const slurp = []
+        for await (const items of iterator) {
+            for (const item of items) {
+                slurp.push(item)
+            }
+        }
+        return items
+    }
+
+    // This will be enough to implement `min`/`max` where needed.
+    static async first (iterator) {
+        for await (const items of iterator) {
+            for (const item of items) {
+                return item
+            }
+        }
+        return null
+    }
 
     constructor (destructible, options) {
         this.destructible = destructible
