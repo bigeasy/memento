@@ -997,7 +997,7 @@ class Mutator extends Transaction {
     }
 
     _getFromMemory (mutation, key) {
-        const { amalgamator, comparator, getter } = mutation.store
+        const { amalgamator, getter } = mutation.store
         for (const array of mutation.appends) {
             const { index, found } = find2(getter, array, [ key ], 0, array.length - 1)
             if (found) {
@@ -1782,16 +1782,16 @@ class Memento {
         })
 
         const partials = []
-        for (let i = 1; i < key.comparisons.length; i++) {
-            partials.push(function (i) {
-                return whittle(comparator, key => key[0].slice(0, i))
-            } (i))
+        for (let i = 0; i < key.comparisons.length; i++) {
+            partials.push(function (end) {
+                return whittle(comparator, key => key[0].slice(0, end))
+            } (i + 1))
         }
 
         this._stores[name[0]].indices[name[1]] = {
             amalgamator, comparator, extractor, partials, qualifier,
             keyLength: key.comparisons.length,
-            getter: partials[key.comparisons.length - 2]
+            getter: partials[key.comparisons.length - 1]
         }
     }
 
