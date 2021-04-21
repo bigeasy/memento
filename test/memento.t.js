@@ -315,7 +315,7 @@ require('proof')(58, async okay => {
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
 
             const gathered = []
-            for await (const presidents of snapshot.forward('president')) {
+            for await (const presidents of snapshot.forward('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }

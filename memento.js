@@ -525,22 +525,39 @@ class IteratorBuilder {
     constructor (options) {
         this._options = options
         this._options.joins = []
+        this._joins = []
     }
 
     join (name, using) {
-        this._options.joins.push({ name, using, inner: true })
+        this._joins.push({ name, using, inner: true })
         return this
     }
 
     outer (name, using) {
-        this._options.joins.push({ name, using, inner: false })
+        this._joins.push({ name, using, inner: false })
         return this
+    }
+
+    iterator () {
+        const options = {
+            ...this._options,
+            joins: this._joins.slice()
+        }
+        return {
+            [Symbol.asyncIterator] () {
+                return new OuterIterator(new (options.Iterator)(options))
+            }
+        }
+        this._reversed = ! this._reversed
     }
 
     [Symbol.asyncIterator] () {
         const options = this._options
         this._options = null
-        return new OuterIterator(new (options.Iterator)(options))
+        return new OuterIterator(new (options.Iterator)({
+            ...options,
+            joins: this._joins.slice()
+        }))
     }
 }
 
