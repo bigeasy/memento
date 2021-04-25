@@ -323,7 +323,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'forward store snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.reverse('president')) {
+            for await (const presidents of snapshot.forward('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }

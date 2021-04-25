@@ -522,10 +522,11 @@ class MutatorIterator extends AmalgamatorIterator {
 }
 
 class IteratorBuilder {
-    constructor (options) {
+    constructor (reversed, options) {
         this._options = options
         this._options.joins = []
         this._joins = []
+        this._reversed = reversed
     }
 
     join (name, using) {
@@ -541,6 +542,7 @@ class IteratorBuilder {
     iterator () {
         const options = {
             ...this._options,
+            direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice()
         }
         return {
@@ -548,7 +550,11 @@ class IteratorBuilder {
                 return new OuterIterator(new (options.Iterator)(options))
             }
         }
+    }
+
+    reverse () {
         this._reversed = ! this._reversed
+        return this
     }
 
     [Symbol.asyncIterator] () {
@@ -556,6 +562,7 @@ class IteratorBuilder {
         this._options = null
         return new OuterIterator(new (options.Iterator)({
             ...options,
+            direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice()
         }))
     }
@@ -604,13 +611,13 @@ class Transaction {
     }
 
     __iterator (name, args, direction) {
+        const reversed = direction == 'reverse'
         if (Array.isArray(name)) {
             const manipulation = this._manipulation(name)
-            return new IteratorBuilder({
+            return new IteratorBuilder(reversed, {
                 Iterator: this._Iterator,
                 transaction: this,
                 manipulation: manipulation,
-                direction: direction,
                 key: args.key,
                 inclusive: args.inclusive,
                 converter: (trampoline, items, consume) => {
@@ -636,11 +643,10 @@ class Transaction {
                 }
             })
         }
-        return new IteratorBuilder({
+        return new IteratorBuilder(reversed, {
             Iterator: this._Iterator,
             transaction: this,
             manipulation: this._manipulation(name),
-            direction: direction,
             key: args.key,
             incluslive: args.inclusive,
             converter: (trampoline, items, consume) => {
