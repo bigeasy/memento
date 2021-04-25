@@ -522,11 +522,12 @@ class MutatorIterator extends AmalgamatorIterator {
 }
 
 class IteratorBuilder {
-    constructor (reversed, options) {
+    constructor (options) {
         this._options = options
         this._options.joins = []
         this._joins = []
-        this._reversed = reversed
+        this._reversed = false
+        this._inclusive = true
     }
 
     join (name, using) {
@@ -539,10 +540,21 @@ class IteratorBuilder {
         return this
     }
 
+    inclusive () {
+        this._inclusive = false
+        return this
+    }
+
+    exclusive () {
+        this._inclusive = false
+        return this
+    }
+
     iterator () {
         const options = {
             ...this._options,
             direction: this._reversed ? 'reverse' : 'forward',
+            inclusive: this._inclusive,
             joins: this._joins.slice()
         }
         return {
@@ -614,7 +626,7 @@ class Transaction {
         const reversed = direction == 'reverse'
         if (Array.isArray(name)) {
             const manipulation = this._manipulation(name)
-            return new IteratorBuilder(reversed, {
+            return new IteratorBuilder({
                 Iterator: this._Iterator,
                 transaction: this,
                 manipulation: manipulation,
@@ -643,7 +655,7 @@ class Transaction {
                 }
             })
         }
-        return new IteratorBuilder(reversed, {
+        return new IteratorBuilder({
             Iterator: this._Iterator,
             transaction: this,
             manipulation: this._manipulation(name),
@@ -661,43 +673,16 @@ class Transaction {
     _iterator (name, vargs, direction) {
         this._memento.pages.purge(this._cacheSize)
         vargs.reverse()
-        const args = { inclusive: true, key: null, filters: [], slurp: null, limit: -1 }
+        const args = { inclusive: true, key: null, limit: -1 }
         while (vargs.length != 0) {
             const varg = vargs.shift()
             switch (typeof varg) {
-            case 'boolean':
-                args.inclusive = varg
-                break
-            case 'number':
-                args.limit = varg
-                break
-            case 'function':
-                args.filters.push(varg)
-                break
             case 'object':
-                assert(Array.isArray(varg))
-                if (varg.length == 0) {
-                    args.slurp = varg
-                } else {
-                    args.key = varg
-                }
+                args.key = varg
+                break
             }
         }
-        const iterator = this.__iterator(name, args, direction)
-        if (args.slurp) {
-            return async function () {
-                const slurp = []
-                for await (const items of iterator) {
-                    for (const item of items) {
-                        if (args.filters.every(filter => filter(item))) {
-                            slurp.push(item)
-                        }
-                    }
-                }
-                return slurp
-            } ()
-        }
-        return iterator
+        return this.__iterator(name, args, direction)
     }
 
     map (name, set, { extractor = $ => $ } = {}) {
