@@ -211,7 +211,7 @@ require('proof')(58, async okay => {
             await future.promise
 
             const gathered = []
-            for await (const presidents of snapshot.forward('president')) {
+            for await (const presidents of snapshot.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -220,19 +220,19 @@ require('proof')(58, async okay => {
             okay(gathered, [], 'snapshot store empty')
 
             {
-                const slurp = await snapshot.forward('president', [])
+                const slurp = await snapshot.cursor('president').array()
                 okay(slurp, [], 'snapshot slurp empty')
             }
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
             }
 
             {
-                const slurp = await snapshot.forward([ 'president', 'name' ], [])
+                const slurp = await snapshot.cursor([ 'president', 'name' ]).array()
                 okay(slurp, [], 'snapshot index slurp empty')
             }
 
@@ -249,7 +249,7 @@ require('proof')(58, async okay => {
             okay(await mutator.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get')
 
             const gathered = []
-            for await (const employees of mutator.forward('president')) {
+            for await (const employees of mutator.cursor('president').iterator()) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -258,12 +258,12 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local forward')
 
             {
-                const slurp = await mutator.forward('president', [])
+                const slurp = await mutator.cursor('president').array()
                 okay(slurp, presidents.slice(0, 1), 'local slurp forward')
             }
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse('president')) {
+            for await (const presidents of mutator.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -272,12 +272,12 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local reverse')
 
             {
-                const slurp = await mutator.reverse('president', [])
+                const slurp = await mutator.cursor('president').reverse().array()
                 okay(slurp, presidents.slice(0, 1), 'local slurp reverse')
             }
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'president', 'name' ])) {
+            for await (const employees of mutator.cursor([ 'president', 'name' ]).iterator()) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -286,12 +286,12 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local index forward')
 
             {
-                const slurp = await mutator.forward([ 'president', 'name' ], [])
+                const slurp = await mutator.cursor([ 'president', 'name' ]).array()
                 okay(slurp, presidents.slice(0, 1), 'local slurp index forward')
             }
 
             gathered.length = 0
-            for await (const employees of mutator.reverse([ 'president', 'name' ])) {
+            for await (const employees of mutator.cursor([ 'president', 'name' ]).reverse().iterator()) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -300,7 +300,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'local index reverse')
 
             {
-                const slurp = await mutator.reverse([ 'president', 'name' ], [])
+                const slurp = await mutator.cursor([ 'president', 'name' ]).reverse().array()
                 okay(slurp, presidents.slice(0, 1), 'local slurp index reverse')
             }
         })
@@ -315,7 +315,7 @@ require('proof')(58, async okay => {
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
 
             const gathered = []
-            for await (const presidents of snapshot.forward('president').iterator()) {
+            for await (const presidents of snapshot.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -323,7 +323,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'forward store snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward('president').reverse().iterator()) {
+            for await (const presidents of snapshot.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -331,7 +331,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'reverse store snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -339,7 +339,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'forward index snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
@@ -386,7 +386,7 @@ require('proof')(58, async okay => {
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get staged')
 
             const gathered = []
-            for await (const employees of mutator.forward('president')) {
+            for await (const employees of mutator.cursor('president').iterator()) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -395,7 +395,7 @@ require('proof')(58, async okay => {
             okay(gathered, presidents.slice(0, 1), 'forward staged')
 
             gathered.length = 0
-            for await (const employees of mutator.forward([ 'president', 'name' ])) {
+            for await (const employees of mutator.cursor([ 'president', 'name' ]).iterator()) {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
@@ -412,7 +412,7 @@ require('proof')(58, async okay => {
             }
 
             const gathered = []
-            for await (const presidents of mutator.forward('president')) {
+            for await (const presidents of mutator.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -421,7 +421,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected, 'insert and iterate many forward')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse('president')) {
+            for await (const presidents of mutator.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -429,7 +429,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).reverse(), 'insert and iterate many reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.forward([ 'president', 'name' ])) {
+            for await (const presidents of mutator.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -437,7 +437,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).sort(), 'insert and iterate many index forward')
 
             gathered.length = 0
-            for await (const presidents of mutator.reverse([ 'president', 'name' ])) {
+            for await (const presidents of mutator.cursor([ 'president', 'name' ]).reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -445,7 +445,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).sort().reverse(), 'insert and iterate many index reverse')
 
             gathered.length = 0
-            for await (const presidents of mutator.forward('president')) {
+            for await (const presidents of mutator.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -457,7 +457,7 @@ require('proof')(58, async okay => {
 
             gathered.length = 0
             memento.pages.purge(0)
-            for await (const presidents of mutator.forward([ 'president', 'name' ])) {
+            for await (const presidents of mutator.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -470,7 +470,7 @@ require('proof')(58, async okay => {
 
         await memento.snapshot(async snapshot => {
             const gathered = []
-            for await (const presidents of snapshot.forward('president')) {
+            for await (const presidents of snapshot.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -479,7 +479,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected, 'store many forward snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.reverse('president')) {
+            for await (const presidents of snapshot.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -487,7 +487,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).reverse(), 'store many reverse snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -495,7 +495,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).sort(), 'index many forward snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.reverse([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -503,7 +503,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected.slice(0).sort().reverse(), 'index many reverse snapshot')
 
             gathered.length = 0
-            for await (const presidents of snapshot.forward('president')) {
+            for await (const presidents of snapshot.cursor('president').iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -515,7 +515,7 @@ require('proof')(58, async okay => {
 
             gathered.length = 0
             memento.pages.purge(0)
-            for await (const presidents of snapshot.forward([ 'president', 'name' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'name' ]).iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)
                 }
@@ -533,7 +533,7 @@ require('proof')(58, async okay => {
         await memento.snapshot(async snapshot => {
             await snapshot.get([ 'president', 'name' ], [ 'Adams', 'John' ])
             const gathered = []
-            let select = snapshot.forward('president').join('state', $ => [ $[0].state ])
+            let select = snapshot.cursor('president').join('state', $ => [ $[0].state ]).iterator()
             for await (const items of select) {
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
@@ -548,7 +548,7 @@ require('proof')(58, async okay => {
 
         await memento.mutator(async mutator => {
             const gathered = []
-            let select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            let select = mutator.cursor('president').join('state', $ => [ $[0].state ]).iterator()
             for await (const items of select) {
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
@@ -562,7 +562,7 @@ require('proof')(58, async okay => {
             mutator.set('president', presidents[16])
             mutator.set('president', presidents[17])
             gathered.length = 0
-            select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            select = mutator.cursor('president').join('state', $ => [ $[0].state ]).iterator()
             for await (const items of select) {
                 memento.pages.purge(0)
                 for (const [ president, state ] of items) {
@@ -576,7 +576,7 @@ require('proof')(58, async okay => {
             okay(gathered, expected, 'inner join appened records')
             mutator.set('state', { code: 'OH', name: 'Ohio 2' })
             gathered.length = 0
-            select = mutator.forward('president').join('state', $ => [ $[0].state ])
+            select = mutator.cursor('president').join('state', $ => [ $[0].state ]).iterator()
             for await (const items of select) {
                 memento.pages.purge(0)
                 for (const [ president, state ] of items) {
@@ -629,7 +629,7 @@ require('proof')(58, async okay => {
 
         await memento.snapshot(async snapshot => {
             const lastNames = []
-            for await (const presidents of snapshot.forward([ 'president', 'state' ], [ 'VA' ])) {
+            for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'VA' ]).iterator()) {
                 for (const president of presidents) {
                     assert.equal(president.state, 'VA')
                     lastNames.push(president.lastName)
