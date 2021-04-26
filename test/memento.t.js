@@ -1,4 +1,4 @@
-require('proof')(58, async okay => {
+require('proof')(60, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
@@ -262,6 +262,16 @@ require('proof')(58, async okay => {
                 okay(slurp, presidents.slice(0, 1), 'local slurp forward')
             }
 
+            {
+                const array = await mutator.cursor('president', [ 'Washington', 'George' ]).exclusive().array()
+                okay(array, [], 'exclude from single element array')
+            }
+
+            {
+                const array = await mutator.cursor('president').exclusive().array()
+                okay(array, presidents.slice(0, 1), 'exclude does not work without key')
+            }
+
             gathered.length = 0
             for await (const presidents of mutator.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
@@ -281,6 +291,16 @@ require('proof')(58, async okay => {
                 for (const employee of employees) {
                     gathered.push(employee)
                 }
+            }
+
+            {
+                const array = await mutator.cursor('president', [ 'Washington', 'George' ]).reverse().exclusive().array()
+//                okay(array, [], 'exclude reverse from single element array')
+            }
+
+            {
+                const array = await mutator.cursor('president').reverse().exclusive().array()
+//                okay(array, presidents.slice(0, 1), 'exclude reverse does not work without key')
             }
 
             okay(gathered, presidents.slice(0, 1), 'local index forward')

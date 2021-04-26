@@ -21,22 +21,25 @@ const fs = require('fs').promises
 const path = require('path')
 const assert = require('assert')
 
-const Destructible = require('destructible')
-const Trampoline = require('reciprocate')
-const Interrupt = require('interrupt')
 const Keyify = require('keyify')
+const Interrupt = require('interrupt')
 
+const Trampoline = require('reciprocate')
+const Destructible = require('destructible')
 
 const Strata = require('b-tree')
 const Magazine = require('magazine')
 
+const Turnstile = require('turnstile')
 const Fracture = require('fracture')
+
 const Rotator = require('amalgamate/rotator')
 const Amalgamator = require('amalgamate')
+
 const Journalist = require('journalist')
 const WriteAhead = require('writeahead')
 const Operation = require('operation')
-const Turnstile = require('turnstile')
+
 const Verbatim = require('verbatim')
 
 const rescue = require('rescue')
@@ -128,7 +131,6 @@ class AmalgamatorIterator {
         this.inclusive = inclusive
         this.manipulation = manipulation
         this.converter = converter
-        this.inclusive = inclusive
         this.done = false
         this.joins = joins
         this.joined = null
@@ -631,7 +633,6 @@ class Transaction {
                 transaction: this,
                 manipulation: manipulation,
                 key: args.key,
-                inclusive: args.inclusive,
                 converter: (trampoline, items, consume) => {
                     this._memento.pages.purge(this._cacheSize)
                     const converted = []
@@ -660,7 +661,6 @@ class Transaction {
             transaction: this,
             manipulation: this._manipulation(name),
             key: args.key,
-            incluslive: args.inclusive,
             converter: (trampoline, items, consume) => {
                 this._memento.pages.purge(this._cacheSize)
                 consume(items.map(item => {
@@ -673,7 +673,7 @@ class Transaction {
     _iterator (name, vargs, direction) {
         this._memento.pages.purge(this._cacheSize)
         vargs.reverse()
-        const args = { inclusive: true, key: null, limit: -1 }
+        const args = { key: null, limit: -1 }
         while (vargs.length != 0) {
             const varg = vargs.shift()
             switch (typeof varg) {
