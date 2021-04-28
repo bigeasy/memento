@@ -83,8 +83,8 @@ require('proof')(6, async okay => {
         //
         // Use the `Snapshot`, the snapshot function can perform read-only requests on the
         // database. The `Snapshot` will have a point in time view of the database. Any
-        // changes made by mutators that commit after the the snapshot callback function
-        // begins will not be visible to the snapshot function.
+        // changes made by mutators that commit after the snapshot callback function begins
+        // will not be visible to the snapshot function.
 
         await memento.snapshot(async snapshot => {
             const got = await snapshot.get('president', [ 'Washington', 'George' ])

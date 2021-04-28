@@ -56,7 +56,7 @@ node test/readme.t.js
 The `'memento'` module exports a single `Memento` object.
 
 ```javascript
-const Memento = require('avenue')
+const Memento = require('memento')
 ```
 
 We create a database object with the static `async Memento.open` function. It
@@ -140,8 +140,8 @@ When we only want to read the database we use a `mutator.snapshot()` with an
 
 Use the `Snapshot`, the snapshot function can perform read-only requests on the
 database. The `Snapshot` will have a point in time view of the database. Any
-changes made by mutators that commit after the the snapshot callback function
-begins will not be visible to the snapshot function.
+changes made by mutators that commit after the snapshot callback function begins
+will not be visible to the snapshot function.
 
 ```javascript
 await memento.snapshot(async snapshot => {

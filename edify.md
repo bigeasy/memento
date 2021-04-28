@@ -167,8 +167,8 @@ When we only want to read the database we use a `mutator.snapshot()` with an
 
 Use the `Snapshot`, the snapshot function can perform read-only requests on the
 database. The `Snapshot` will have a point in time view of the database. Any
-changes made by mutators that commit after the the snapshot callback function
-begins will not be visible to the snapshot function.
+changes made by mutators that commit after the snapshot callback function begins
+will not be visible to the snapshot function.
 
 ```javascript
 //{ "name": "introduction" }
