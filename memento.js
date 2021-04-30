@@ -57,7 +57,7 @@ const mvcc = {
 }
 
 // **TODO** You should only need to keep one of these.
-const find2 = function () {
+const find = function () {
     const find = require('b-tree/find')
     return function (comparator, array, key, low, high) {
         const index = find(comparator, array, key, low, high)
@@ -223,13 +223,13 @@ class AmalgamatorIterator {
                 if (key == null) {
                     return 0
                 }
-                const { index, found } = find2(comparator, array, [ key ], 0, array.length - 1)
+                const { index, found } = find(comparator, array, [ key ], 0, array.length - 1)
                 return found ? index + 1 : index
             } ()
             const end = function () {
                 if (scope.converted != null) {
                     const key = scope.converted[scope.converted.length - 1].key[0]
-                    const { index, found } =  find2(comparator, array, [ key ], 0, array.length - 1)
+                    const { index, found } =  find(comparator, array, [ key ], 0, array.length - 1)
                     return found ? index + 1 : index
                 }
                 return array.length
@@ -439,7 +439,7 @@ class MutatorIterator extends AmalgamatorIterator {
             const comparator = this.manipulation.store.getter
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
-                : find2(comparator, array, [ this.key ], 0, array.length - 1)
+                : find(comparator, array, [ this.key ], 0, array.length - 1)
             if (found || direction == -1) {
                 index += direction
             }
@@ -492,7 +492,7 @@ class MutatorIterator extends AmalgamatorIterator {
                     appends
                 } = this.transaction._mutator(this.joins[0].name)
                 for (const array of appends) {
-                    const { index, found } = find2(comparator.key, array, [ join.keys[i] ], 0, array.length - 1)
+                    const { index, found } = find(comparator.key, array, [ join.keys[i] ], 0, array.length - 1)
                     if (found) {
                         const hit = array[index]
                         join.values[i + 1] = hit.method == 'remove' ? null : hit.parts[1]
@@ -951,7 +951,7 @@ class Mutator extends Transaction {
             order: compound[2]
         }, record ]
         const comparator = mutation.store.getter
-        const { index, found } = find2(comparator, array, compound, 0, array.length - 1)
+        const { index, found } = find(comparator, array, compound, 0, array.length - 1)
         if (found) {
             array[index] = { key: compound, parts, value, join: null }
         } else {
@@ -995,7 +995,7 @@ class Mutator extends Transaction {
     _getFromMemory (mutation, key) {
         const { amalgamator, getter } = mutation.store
         for (const array of mutation.appends) {
-            const { index, found } = find2(getter, array, [ key ], 0, array.length - 1)
+            const { index, found } = find(getter, array, [ key ], 0, array.length - 1)
             if (found) {
                 return array[index]
             }
