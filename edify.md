@@ -35,15 +35,19 @@ Proof `okay` function to assert out statements in the readme. A Proof unit test
 generally looks like this.
 
 ```javascript
-//{ "code": { "tests": 6 }, "text": { "tests": 4  } }
+//{ "code": { "tests": 2 }, "text": { "tests": 4  } }
 require('proof')(%(tests)d, async okay => {
-    //{ "include": "testRequire" }
     //{ "include": "test" }
-    okay('always okay')
-    okay(true, 'okay if true')
-    okay(1, 1, 'okay if equal')
-    okay({ value: 1 }, { value: 1 }, 'okay if deep strict equal')
+    //{ "include": "testDisplay" }
 })
+```
+
+```javascript
+//{ "name": "testDisplay", "mode": "text" }
+okay('always okay')
+okay(true, 'okay if true')
+okay(1, 1, 'okay if equal')
+okay({ value: 1 }, { value: 1 }, 'okay if deep strict equal')
 ```
 
 You can run this unit test yourself to see the output from the various
@@ -65,7 +69,7 @@ const Memento = require('memento')
 ```
 
 ```javascript
-//{ "name": "testRequire", "mode": "code" }
+//{ "name": "test", "mode": "code" }
 const Memento = require('..')
 
 const path = require('path')

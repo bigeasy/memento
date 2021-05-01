@@ -36,11 +36,14 @@ generally looks like this.
 
 ```javascript
 require('proof')(4, async okay => {
-    okay('always okay')
-    okay(true, 'okay if true')
-    okay(1, 1, 'okay if equal')
-    okay({ value: 1 }, { value: 1 }, 'okay if deep strict equal')
 })
+```
+
+```javascript
+okay('always okay')
+okay(true, 'okay if true')
+okay(1, 1, 'okay if equal')
+okay({ value: 1 }, { value: 1 }, 'okay if deep strict equal')
 ```
 
 You can run this unit test yourself to see the output from the various

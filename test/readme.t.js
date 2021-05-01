@@ -30,7 +30,7 @@
 // Proof `okay` function to assert out statements in the readme. A Proof unit test
 // generally looks like this.
 
-require('proof')(6, async okay => {
+require('proof')(2, async okay => {
     const Memento = require('..')
 
     const path = require('path')
@@ -99,10 +99,6 @@ require('proof')(6, async okay => {
 
     }
 
-    okay('always okay')
-    okay(true, 'okay if true')
-    okay(1, 1, 'okay if equal')
-    okay({ value: 1 }, { value: 1 }, 'okay if deep strict equal')
 })
 
 // You can run this unit test yourself to see the output from the various
