@@ -513,7 +513,6 @@ class MutatorIterator extends AmalgamatorIterator {
 class IteratorBuilder {
     constructor (options) {
         this._options = options
-        this._options.joins = []
         this._joins = []
         this._reversed = false
         this._inclusive = true
