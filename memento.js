@@ -338,7 +338,7 @@ class SnapshotIterator extends AmalgamatorIterator {
 
 // When we visit that item we check the map for the join values extracted from
 // storage and then we check in memory stage for each value which is
-// a synchornous action. The key is that we do it right at the time we're
+// a synchronous action. The key is that we do it right at the time we're
 // returning the join from the inner iterator.
 
 // Note that we'll use the ordinary get to look up the join value. This will
@@ -359,7 +359,7 @@ class SnapshotIterator extends AmalgamatorIterator {
 // are hot in the cache of the amalgamator of the joined store, our get will
 // run synchronously and we can return the result.
 
-// If our get does not run synchronosly, we'll know. When we call the trampoline
+// If our get does not run synchronously, we'll know. When we call the trampoline
 // seek we will get a true value and that means we have an async operation in
 // the trampoline, so we return done for the inner iterator. When the outer
 // iterator is called again, we'll check seek on the same trampoline and run it,
@@ -398,14 +398,14 @@ class MutatorIterator extends AmalgamatorIterator {
     // The problem with advancing over our in-memory or file backed stage is
     // that there may be writes to the stage that are greater than the last
     // value returned, but less than any of the values that have been sliced
-    // into memory. Advacing indexes into the in-memory stage for inserts
+    // into memory. Advancing indexes into the in-memory stage for inserts
     // doesn't help. If the last value returned from our primary tree is 'a',
     // and the index of the in-memory stage is pointing at 'z', then if we've
     // inserted 'b' since our last `next()` we are not going to see it, we will
     // continue from 'z' even if we've been adjusting our index for the inserts.
     //
-    // What if we don't advance the index? We'll let's say the amalgamaged tree
-    // is at 'z' and our in-memory store is at 'b' so we reutrn 'b'. Now we
+    // What if we don't advance the index? We'll let's say the amalgamated tree
+    // is at 'z' and our in-memory store is at 'b' so we return 'b'. Now we
     // insert 'a' and we point at a. Really, advancing the index is not about
     // the index but about a comparison with the value at the insert spot. Seems
     // like we may as well just do a binary search each time.
@@ -1088,8 +1088,8 @@ class Mutator extends Transaction {
     //
 
     // The user rolls back by calling this method which will raise an exception
-    // which is merely a symbol we catch. This will stop forwward progress it
-    // the user function, which may make for cleaner code. We throw a symbol to
+    // which is merely a symbol we catch. This will stop forward progress it the
+    // user function, which may make for cleaner code. We throw a symbol to
     // forgo the generation of a stack trace. `try`/`catch` is probably still
     // expensive, but rollback is probably not a frequent operation.
 
@@ -1357,7 +1357,7 @@ class Memento {
 
     // Open runs the upgrade system. Version numbers are kept on the file system
     // as directories in the versions directory. No other place to keep them.
-    // The write-ahead log is always rotating. It just doens't belong in any of
+    // The write-ahead log is always rotating. It just doesn't belong in any of
     // the trees. Not sure what to do with users who delete just some of the
     // stuff in their database directory. They used to be directories, but now
     // they are just empty files so that no one decides to prune them.
@@ -1427,7 +1427,7 @@ class Memento {
         // Schema upgrades use a mutator that has the creation, rename and
         // delete functions. When we create a new store or index we create a new
         // Amalgamator in a `staging` directory. If we rollback we can just
-        // delete the staging directory when we reopen. Otherwise, we suffle
+        // delete the staging directory when we reopen. Otherwise, we shuffle
         // these files out of the `staging` directory and into their new homes
         // in the `stores` and `indices` directory.
         if (latest < version) {
@@ -1443,15 +1443,14 @@ class Memento {
                 rescue(error, [ Symbol, ROLLBACK ])
                 throw new Memento.Error('ROLLBACK')
             }
-            // Proceding with commit. We pass false to `Schema._commit` so that
-            // it does not write the version to the write-ahead log.
-            // TODO Why?
+            // Proceeding with commit. We pass false to `Schema._commit` so that
+            // it does not write the version to the write-ahead log. TODO Why?
             await schema._commit(false)
 
             // We want to rotate the staging trees of the Amalgamators into
             // their primary directory-based b-trees. This has to do with the
             // fact that the relevant blocks in the write-ahead log for a
-            // paritcular Amalgamator are keyed on a key of our choosing and we
+            // particular Amalgamator are keyed on a key of our choosing and we
             // chose that key based on the directory name in which the
             // Amalgamator is stored. We're about to change that directory name
             // so we clear out the write-ahead log so we don't lose anything
@@ -1474,10 +1473,10 @@ class Memento {
             // We don't want to run an ordinary mutator commit. The file shuffle
             // prepare could still fail. The upserts and deletes of the schema
             // change should only take effect if we successfully prepare our
-            // file suffle.
+            // file shuffle.
             //
             // We write the version for the schema as part of the atomic file
-            // suffle operation.
+            // shuffle operation.
             journalist.message(Buffer.from(JSON.stringify(schema._transaction.mutation.version)))
             // We now move our temporary files into place.
             for (const operation of schema._operations) {
