@@ -110,7 +110,9 @@ class OuterIterator {
 // iterators.
 class AmalgamatorIterator {
     constructor({
-        transaction, manipulation, direction, key, inclusive, converter, joins = []
+        transaction, manipulation, key, converter
+    }, {
+        direction, inclusive, joins = []
     }) {
         this.transaction = transaction
         this.key = key
@@ -267,8 +269,8 @@ class AmalgamatorIterator {
 
 //
 class SnapshotIterator extends AmalgamatorIterator {
-    constructor (options) {
-        super(options)
+    constructor (construct, options) {
+        super(construct, options)
     }
 
     get reversed () {
@@ -374,9 +376,9 @@ class SnapshotIterator extends AmalgamatorIterator {
 
 //
 class MutatorIterator extends AmalgamatorIterator {
-    constructor (options) {
-        super(options)
-        this.comparator = options.manipulation.store.amalgamator.comparator.stage.key
+    constructor (construct, options) {
+        super(construct, options)
+        this.comparator = construct.manipulation.store.amalgamator.comparator.stage.key
         this.trampoline = new Trampoline
     }
     //
@@ -511,8 +513,8 @@ class MutatorIterator extends AmalgamatorIterator {
 }
 
 class IteratorBuilder {
-    constructor (options) {
-        this._options = options
+    constructor (construct) {
+        this._construct = construct
         this._joins = []
         this._reversed = false
         this._inclusive = true
@@ -540,14 +542,14 @@ class IteratorBuilder {
 
     iterator () {
         const options = {
-            ...this._options,
-            direction: this._reversed ? 'reverse' : 'forward',
             inclusive: this._inclusive,
+            direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice()
         }
         return {
+            _construct: this._construct,
             [Symbol.asyncIterator] () {
-                return new OuterIterator(new (options.Iterator)(options))
+                return new OuterIterator(new (this._construct.Iterator)(this._construct, options))
             }
         }
     }
