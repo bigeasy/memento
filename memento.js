@@ -112,7 +112,7 @@ class AmalgamatorIterator {
     constructor({
         transaction, manipulation, key, converter
     }, {
-        direction, inclusive, joins = []
+        direction, inclusive, joins = [], terminators
     }) {
         this.transaction = transaction
         this.key = key
@@ -123,6 +123,7 @@ class AmalgamatorIterator {
         this.done = false
         this.joins = joins
         this.joined = null
+        this.terminators = terminators
         this.comparator = manipulation.store.amalgamator.comparator.stage.key
         this.trampoline = new Trampoline
     }
@@ -306,6 +307,12 @@ class SnapshotIterator extends AmalgamatorIterator {
                 this.inclusive = false
             }
             if (result != null) {
+                for (const terminator of this.terminators) {
+                    if (terminator(result.value)) {
+                        this.done = true
+                        return { done: true, value: null }
+                    }
+                }
                 return result
             }
         }
@@ -466,6 +473,12 @@ class MutatorIterator extends AmalgamatorIterator {
                 this.inclusive = false
             }
             if (result != null) {
+                for (const terminator of this.terminators) {
+                    if (terminator(result.value)) {
+                        this.done = true
+                        return { done: true, value: null }
+                    }
+                }
                 return result
             }
         }
@@ -516,6 +529,7 @@ class IteratorBuilder {
     constructor (construct) {
         this._construct = construct
         this._joins = []
+        this._terminators = []
         this._reversed = false
         this._inclusive = true
     }
@@ -540,11 +554,17 @@ class IteratorBuilder {
         return this
     }
 
+    terminate (terminator) {
+        this._terminators.push(terminator)
+        return this
+    }
+
     iterator () {
         const options = {
             inclusive: this._inclusive,
             direction: this._reversed ? 'reverse' : 'forward',
-            joins: this._joins.slice()
+            joins: this._joins.slice(),
+            terminators: this._terminators.slice()
         }
         return {
             _construct: this._construct,
