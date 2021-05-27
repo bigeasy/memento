@@ -1392,9 +1392,10 @@ class Memento {
         destructible = new Destructible($ => $(), 'memento'),
         turnstile = new Turnstile(destructible.durable($ => $(), { isolated: true }, 'turnstile')),
         directory,
-        version = 1,
+        version,
         comparators = {}
     } = {}, upgrade) {
+        version = coalesce(version, 1)
         // Run a recovery of a failed schema change, or any schema change since
         // we always for schema changes into recovery to exercise the system.
         const journalist = await Journalist.create(directory)
