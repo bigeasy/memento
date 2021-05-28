@@ -1329,6 +1329,7 @@ class Memento {
         this._stores = {}
         assert(options.pages)
         this.pages = options.pages
+        this.version = options.version
         this._cacheSize = 1024 * 1024 * 256
         const directory = this.directory = options.directory
         this._rotator = options.rotator
@@ -1354,7 +1355,7 @@ class Memento {
     static async _open (destructible, { directory, turnstile, version, comparators, options }) {
         const writeahead = new WriteAhead(destructible.durable($ => $(), 'writeahead'), turnstile, await WriteAhead.open({ directory: path.resolve(directory, 'wal') }))
         const rotator = new Rotator(destructible.durable($ => $(), 'rotator'), await Rotator.open(writeahead), { size: 1024 * 1024 / 4 })
-        const memento = new Memento(destructible, { turnstile, directory, rotator, comparators, pages: options.pages })
+        const memento = new Memento(destructible, { version, turnstile, directory, rotator, comparators, pages: options.pages })
         for (const dir of (await fs.readdir(path.join(directory, 'stores')))) {
             const name = [ dir ]
             await memento._store({
@@ -1557,7 +1558,7 @@ class Memento {
             // recovered.)
             return Memento.open({ destructible, turnstile, directory, version, comparators })
         }
-        const memento = await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version, comparators, options })
+        const memento = await Memento._open(destructible.ephemeral($ => $(), 'memento'), { directory, turnstile, version: latest, comparators, options })
         if (journalist.messages.length) {
             const version = JSON.parse(String(journalist.messages.shift()))
             await memento._rotator.commit(Fracture.stack(), version)
