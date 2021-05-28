@@ -1479,6 +1479,10 @@ class Memento {
             // Amalgamator is stored. We're about to change that directory name
             // so we clear out the write-ahead log so we don't lose anything
             // with the rename.
+
+            // **TODO** If the upgrade action has destroyed the destructible,
+            // this will not return, the promise will not resolve. Locker needs
+            // to surrender its rotate, just return immediately.
             await memento._rotator.locker.rotate().promise
             //
 
