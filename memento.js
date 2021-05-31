@@ -1138,6 +1138,7 @@ class Mutator extends Transaction {
             await promise
             this._promises.delete(promise)
         }
+        await this._memento._rotator.rollback(stack, this._transaction.mutation.version)
         // Rollback in-memory, no commit logging of course.
         this._memento._rotator.locker.rollback(this._transaction)
         this._memento._rotator.locker.release(this._snapshot)
