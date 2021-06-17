@@ -141,8 +141,7 @@ require('proof')(60, async okay => {
     await fs.mkdir(directory, { recursive: true })
 
     const trace = []
-    const destructible = new Destructible(1000, {
-    }, 'memento.t')
+    const destructible = new Destructible(1000, 'memento.t')
     function createMemento (version = 1, rollback = false) {
         return Memento.open({
             version: version,
@@ -441,6 +440,7 @@ require('proof')(60, async okay => {
             okay(gathered, expected, 'insert and iterate many forward')
 
             gathered.length = 0
+            debugger
             for await (const presidents of mutator.cursor('president').reverse().iterator()) {
                 for (const president of presidents) {
                     gathered.push(president.lastName)

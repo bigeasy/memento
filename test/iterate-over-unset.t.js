@@ -1,4 +1,4 @@
-require('proof')(60, async okay => {
+require('proof')(4, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
@@ -36,12 +36,12 @@ require('proof')(60, async okay => {
 
         const array = []
         for (let i = 0; i < 10; i++) {
-            array[i] = { key: i }
+            array[i] = { key: i, value: i }
         }
 
         await memento.mutator(async mutator => {
             for (const i of array) {
-                mutator.set('store', { key: i.key })
+                mutator.set('store', { key: i.key, value: i.key })
             }
         })
 
@@ -51,9 +51,34 @@ require('proof')(60, async okay => {
         })
 
         await memento.mutator(async mutator => {
-            mutator.unset('store', [ 2 ])
+            mutator.set('store', { key: 2, value: 'x' })
+            array[2].value = 'x'
             const gather = await mutator.cursor('store').array()
+            console.log(gather)
             okay(gather, array, 'store')
+        })
+
+        await memento.mutator(async mutator => {
+            mutator.set('store', { key: 2, value: 'x' })
+            array[2].value = 'x'
+            const gather = await mutator.cursor('store').array()
+            console.log(gather)
+            okay(gather, array, 'store')
+        })
+
+        await memento.mutator(async mutator => {
+            mutator.set('store', { key: 2, value: 'x' })
+            array[2].value = 'x'
+            const gather = await mutator.cursor('store').array()
+            console.log(gather)
+            okay(gather, array, 'store')
+        })
+
+        if (false) await memento.mutator(async mutator => {
+            mutator.set('store', { key: 4, value: 'x' })
+            array[4].value = 'x'
+            const gather = await mutator.cursor('store', [ 4 ]).array()
+            okay(gather, array.slice(4), 'store')
         })
 
         destructible.destroy()

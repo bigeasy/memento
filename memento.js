@@ -393,12 +393,15 @@ class MutatorIterator extends AmalgamatorIterator {
     // When must search our in memory stage for each inner iteration because the
     // user can synchronously upsert or delete at any time changing the
     // in-memory stage. We are constantly updating our `key` for search.
-    // **TODO** create a `_previous` property. Considered using a node based
-    // structure so iteration could be done by reference, but the in-memory
-    // stage can be replaced synchronously at any moment. Wait, doesn't that
-    // mean we can lose track of it? Yes, we can. **TODO** When we rotate our
-    // in-memory stage we need to increment the series so that we force a new
-    // amalgamator iterator generation.
+    // Considered using a node based structure so iteration could be done by
+    // reference, but the in-memory stage can be replaced synchronously at any
+    // moment. Wait, doesn't that mean we can lose track of it? Yes, we can.
+    // Imagine storage has `[ 0, 10 ]` and you have a node `{ key: 9 }` and on
+    // the next iteration keys 1 though 8 are inserted, you have to iterate
+    // backwards. Not a big deal, but not simpler.
+    //
+    // **TODO** When we rotate our in-memory stage we need to increment the
+    // series so that we force a new amalgamator iterator generation.
     //
     // **TODO** Note that, because we only ever insert records into the
     // in-memory stage, we can probably exclude the bottom or top that we've
@@ -419,15 +422,19 @@ class MutatorIterator extends AmalgamatorIterator {
     // the index but about a comparison with the value at the insert spot. Seems
     // like we may as well just do a binary search each time.
     //
-    // This problem also exists for staging. I've worked through a number of
-    // goofy ideas to keep the active staging tree up-to-date, but the best
-    // thing to do, for now, is to just scrap the entire existing iterator and
-    // recreate it.
+    // So, array or linked list it's a question of binary search or scanning,
+    // and as noted above, this is probably easier.
+    //
+    // This problem also exists for staging trees versus primary tree. I've
+    // worked through a number of goofy ideas to keep the active staging tree
+    // up-to-date, but the best thing to do, for now, is to just scrap the
+    // entire existing iterator and recreate it.
     //
     // Thought on these nested iterators, they should all always return
     // something, a non-empty set, shouldn't they? Why force that logic on the
     // caller? Yet something like dilute might do this and I've been looking at
-    // making dilute synchronous.
+    // making dilute synchronous. TODO What was this about? We now have
+    // synchronous iterators with Reciprocate. Is this solved?
 
     //
     inner () {
@@ -445,14 +452,22 @@ class MutatorIterator extends AmalgamatorIterator {
                 }
             }
             const array = this.manipulation.appends[0]
+            // Use comparator that will compare only the user key to find an
+            // in-memory instance of a record. TODO Currently not working for an
+            // overwrite of the first `inclusive` key.
             const getter = this.manipulation.store.getter
-            const comparator = this.manipulation.store.amalgamator.comparator.stage.key
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
                 : find(getter, array, [ this.key ], 0, array.length - 1)
+            // Unfound puts us at the insert position so that when iterating
+            // backwards we are at the first in-memory value greater than the
+            // key, backing up will put us at the first in-memory value less
+            // than the key. TODO This has to be updated for `inclusive`.
             if (found || direction == -1) {
                 index += direction
             }
+            // If the updated index is within the array boundaries we have an
+            // in-memory overwite candidate.
             if (0 <= index && index < array.length) {
                 candidates.push({ array, index })
             }
@@ -460,20 +475,33 @@ class MutatorIterator extends AmalgamatorIterator {
                 this.done = true
                 return { done: true, value: null }
             }
-            candidates.sort((left, right) => {
-                debugger
-                return comparator(left.array[left.index].key, right.array[right.index].key) * direction
-            })
+            const comparator = this.manipulation.store.amalgamator.comparator.stage.key
+            let compare = 1
+            if (candidates.length == 2) {
+                compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) * direction
+                if (compare > 0) {
+                    candidates.push(candidates.shift())
+                }
+            }
+            /*
+            console.log(candidates[0].array[candidates[0].index])
             if (candidates.length != 1) {
-                console.log('---')
-                console.log(candidates[0].array[candidates[0].index])
                 console.log(candidates[1].array[candidates[1].index])
             }
+             */
             const candidate = candidates.shift()
             // We always increment the index because Strata iterators return the
             // values reversed but we search our in-memory stage each time we
             // descend.
             const item = candidate.array[candidate.index++]
+            if (compare == 0 && item.inMemory) {
+                this._items.index++
+            }
+            if (item.parts[0].method == 'remove') {
+                this.key = item.key[0]
+                this.inclusive = false
+                continue
+            }
             const result = this._filter(item)
             if (result == null || !result.done) {
                 this.key = item.key[0]
@@ -660,7 +688,7 @@ class Transaction {
                             this._get(name[0], key, trampoline, item => {
                                 assert(item != null)
                                 converted[i] = {
-                                    key: items[i].key, value: item.parts[1], join: []
+                                    key: items[i].key, parts: item.parts, value: item.parts[1], join: [], inMemory: false
                                 }
                                 i++
                                 trampoline.sync(() => get())
@@ -679,7 +707,7 @@ class Transaction {
             converter: (trampoline, items, consume) => {
                 this._memento.pages.purge(this._cacheSize)
                 consume(items.map(item => {
-                    return { key: item.key, value: item.parts[1], join: [] }
+                    return { key: item.key, parts: item.parts, value: item.parts[1], join: [], inMemory: false }
                 }))
             }
         })
@@ -981,9 +1009,9 @@ class Mutator extends Transaction {
         const comparator = mutation.store.getter
         const { index, found } = find(comparator, array, compound, 0, array.length - 1)
         if (found) {
-            array[index] = { key: compound, parts, value, join: null }
+            array[index] = { key: compound, parts, value, join: null, inMemory: true }
         } else {
-            array.splice(index, 0, { key: compound, parts, value, join: null })
+            array.splice(index, 0, { key: compound, parts, value, join: null, inMemory: true })
         }
     }
 
