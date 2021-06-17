@@ -476,26 +476,21 @@ class MutatorIterator extends AmalgamatorIterator {
                 return { done: true, value: null }
             }
             const comparator = this.manipulation.store.amalgamator.comparator.stage.key
-            let compare = 1
             if (candidates.length == 2) {
-                compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) * direction
+                const compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) * direction
                 if (compare > 0) {
                     candidates.push(candidates.shift())
                 }
             }
-            /*
-            console.log(candidates[0].array[candidates[0].index])
-            if (candidates.length != 1) {
-                console.log(candidates[1].array[candidates[1].index])
-            }
-             */
             const candidate = candidates.shift()
             // We always increment the index because Strata iterators return the
             // values reversed but we search our in-memory stage each time we
             // descend.
             const item = candidate.array[candidate.index++]
-            if (compare == 0 && item.inMemory) {
-                this._items.index++
+            if (candidates.length == 1) {
+                if (getter(item.key, candidates[0].array[candidates[0].index].key) == 0 && item.inMemory) {
+                    this._items.index++
+                }
             }
             if (item.parts[0].method == 'remove') {
                 this.key = item.key[0]
