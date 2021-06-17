@@ -445,10 +445,11 @@ class MutatorIterator extends AmalgamatorIterator {
                 }
             }
             const array = this.manipulation.appends[0]
-            const comparator = this.manipulation.store.getter
+            const getter = this.manipulation.store.getter
+            const comparator = this.manipulation.store.amalgamator.comparator.stage.key
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
-                : find(comparator, array, [ this.key ], 0, array.length - 1)
+                : find(getter, array, [ this.key ], 0, array.length - 1)
             if (found || direction == -1) {
                 index += direction
             }
@@ -460,8 +461,14 @@ class MutatorIterator extends AmalgamatorIterator {
                 return { done: true, value: null }
             }
             candidates.sort((left, right) => {
+                debugger
                 return comparator(left.array[left.index].key, right.array[right.index].key) * direction
             })
+            if (candidates.length != 1) {
+                console.log('---')
+                console.log(candidates[0].array[candidates[0].index])
+                console.log(candidates[1].array[candidates[1].index])
+            }
             const candidate = candidates.shift()
             // We always increment the index because Strata iterators return the
             // values reversed but we search our in-memory stage each time we
@@ -1489,11 +1496,13 @@ class Memento {
 
             // And one more time for good measure.
             await memento._rotator.locker.rotate().promise
+
             //
 
             // Now we wait for the temporary Memento to shutdown which will
             // flush the rotations.
             await memento.destructible.destroy().promise
+
             //
 
             // Journalist is a utility that will perform a series of atomic file
