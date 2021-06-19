@@ -589,19 +589,14 @@ class IteratorBuilder {
         return this
     }
 
-    iterator () {
+    [Symbol.asyncIterator] () {
         const options = {
             inclusive: this._inclusive,
             direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice(),
             terminators: this._terminators.slice()
         }
-        return {
-            _construct: this._construct,
-            [Symbol.asyncIterator] () {
-                return new OuterIterator(new (this._construct.Iterator)(this._construct, options))
-            }
-        }
+        return new OuterIterator(new (this._construct.Iterator)(this._construct, options))
     }
 
     reverse () {
@@ -611,7 +606,7 @@ class IteratorBuilder {
 
     async array () {
         const array = []
-        for await (const items of this.iterator()) {
+        for await (const items of this) {
             for (const item of items) {
                 array.push(item)
             }
@@ -1265,7 +1260,7 @@ class Schema extends Mutator {
         // large as the largest page in the store and commit those in a chunk,
         // but I don't believe that the slice size is forwarded to amalgamate
         // yet.
-        for await (const items of this.cursor(name[0]).iterator()) {
+        for await (const items of this.cursor(name[0])) {
             const appends = []
             for (const item of items) {
                 const key = _index.store.extractor([ item ])
