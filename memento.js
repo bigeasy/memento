@@ -672,15 +672,14 @@ class Transaction {
         this._transaction = transaction
     }
 
-    __iterator (name, args, direction) {
-        const reversed = direction == 'reverse'
+    _iterator (name, key) {
         if (Array.isArray(name)) {
             const manipulation = this._manipulation(name)
             return new IteratorBuilder({
                 Iterator: this._Iterator,
                 transaction: this,
                 manipulation: manipulation,
-                key: args.key,
+                key: key,
                 converter: (trampoline, items, consume) => {
                     this._memento.pages.purge(this._cacheSize)
                     const converted = []
@@ -708,7 +707,7 @@ class Transaction {
             Iterator: this._Iterator,
             transaction: this,
             manipulation: this._manipulation(name),
-            key: args.key,
+            key: key,
             converter: (trampoline, items, consume) => {
                 this._memento.pages.purge(this._cacheSize)
                 consume(items.map(item => {
@@ -716,21 +715,6 @@ class Transaction {
                 }))
             }
         })
-    }
-
-    _iterator (name, vargs, direction) {
-        this._memento.pages.purge(this._cacheSize)
-        vargs.reverse()
-        const args = { key: null, limit: -1 }
-        while (vargs.length != 0) {
-            const varg = vargs.shift()
-            switch (typeof varg) {
-            case 'object':
-                args.key = varg
-                break
-            }
-        }
-        return this.__iterator(name, args, direction)
     }
 
     map (name, set, { extractor = $ => $ } = {}) {
@@ -807,8 +791,8 @@ class Transaction {
         })
     }
 
-    cursor (name, ...vargs) {
-        return this._iterator(name, vargs, 'forward')
+    cursor (name, key = null) {
+        return this._iterator(name, key, 'forward')
     }
 
     get (name, key, trampoline = new Trampoline, consume = value => trampoline.set(value)) {
