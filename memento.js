@@ -435,6 +435,9 @@ class MutatorIterator extends AmalgamatorIterator {
     // caller? Yet something like dilute might do this and I've been looking at
     // making dilute synchronous. TODO What was this about? We now have
     // synchronous iterators with Reciprocate. Is this solved?
+    //
+    // This is by far the most complicated bit of code in this module, so please
+    // revisit it often to ensure that your comments do not get out of sync.
 
     //
     inner () {
@@ -584,6 +587,11 @@ class IteratorBuilder {
         return this
     }
 
+    limit (limit) {
+        this._limit = + limit
+        return this
+    }
+
     terminate (terminator) {
         this._terminators.push(terminator)
         return this
@@ -595,6 +603,13 @@ class IteratorBuilder {
             direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice(),
             terminators: this._terminators.slice()
+        }
+        if (this._limit != null) {
+            options.terminators.push(function (limit) {
+                return function () {
+                    return limit-- == 0
+                }
+            } (this._limit))
         }
         return new OuterIterator(new (this._construct.Iterator)(this._construct, options))
     }

@@ -1,4 +1,4 @@
-require('proof')(60, async okay => {
+require('proof')(64, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
@@ -486,6 +486,20 @@ require('proof')(60, async okay => {
                 }
             }
             okay(gathered, expected.slice(0).sort().concat(expected.slice(0).sort().reverse().slice(1)), 'index iterator reversal')
+
+            {
+                const min = await mutator.cursor('president').limit(1).array()
+                okay(min.map(item => item.terms), [[ 1 ]], 'limit store to one, essentially min')
+                const max = await mutator.cursor('president').reverse().limit(1).array()
+                okay(max.map(item => item.terms), [[ 16 ]], 'limit reversed store to one, essentially max')
+            }
+
+            {
+                const min = await mutator.cursor([ 'president', 'name' ]).limit(1).array()
+                okay(min.map(item => item.lastName), [ 'Adams' ], 'limit index to one, essentially min')
+                const max = await mutator.cursor([ 'president', 'name' ]).reverse().limit(1).array()
+                okay(max.map(item => item.lastName), [ 'Washington' ], 'limit index to one, essentially max')
+            }
         })
 
         await memento.snapshot(async snapshot => {
