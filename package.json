@@ -33,7 +33,7 @@
                             "reciprocate":                  "0.0.7",
                             "rescue":                       "7.0.0-alpha.14",
                             "satiate":                      "0.0.3",
-                            "verbatim":                     "0.1.3",
+                            "verbatim":                     "0.1.4",
                             "whittle":                      "0.0.1"
     },
     "devDependencies":
