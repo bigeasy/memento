@@ -466,7 +466,7 @@ class MutatorIterator extends AmalgamatorIterator {
             // backwards we are at the first in-memory value greater than the
             // key, backing up will put us at the first in-memory value less
             // than the key. TODO This has to be updated for `inclusive`.
-            if (found || direction == -1) {
+            if ((found && ! this.inclusive) || direction == -1) {
                 index += direction
             }
             // If the updated index is within the array boundaries we have an

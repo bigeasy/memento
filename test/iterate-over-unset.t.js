@@ -1,4 +1,4 @@
-require('proof')(4, async okay => {
+require('proof')(5, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
@@ -74,7 +74,7 @@ require('proof')(4, async okay => {
             okay(gather, array, 'store')
         })
 
-        if (false) await memento.mutator(async mutator => {
+        await memento.mutator(async mutator => {
             mutator.set('store', { key: 4, value: 'x' })
             array[4].value = 'x'
             const gather = await mutator.cursor('store', [ 4 ]).array()
