@@ -112,11 +112,12 @@ class AmalgamatorIterator {
     constructor({
         transaction, manipulation, key, converter
     }, {
-        direction, inclusive, joins = [], terminators
+        direction, inclusive, joins = [], terminators, skips
     }) {
         this.transaction = transaction
         this.key = key
         this.direction = direction
+        this.skips = skips
         this.inclusive = inclusive
         this.manipulation = manipulation
         this.converter = converter
@@ -319,6 +320,12 @@ class SnapshotIterator extends AmalgamatorIterator {
     }
 
     _filter (item) {
+        if (this.skips.length != 0) {
+            if (this.skips.some(f => f(item))) {
+                return null
+            }
+            this.skips.length = 0
+        }
         if (this.joins.length != 0) {
             for (let i = 0; i < this.joins.length; i++) {
                 if (this.joins[i].inner && item.join.values[i + 1] == null) {
@@ -518,6 +525,12 @@ class MutatorIterator extends AmalgamatorIterator {
     }
 
     _filter (item) {
+        if (this.skips.length != 0) {
+            if (this.skips.some(f => f(item))) {
+                return null
+            }
+            this.skips.length = 0
+        }
         if (this.joins.length != 0) {
             let join = item.join
             if (join == null) {
@@ -563,6 +576,7 @@ class IteratorBuilder {
         this._construct = construct
         this._joins = []
         this._terminators = []
+        this._skips = []
         this._reversed = false
         this._inclusive = true
     }
@@ -587,6 +601,11 @@ class IteratorBuilder {
         return this
     }
 
+    skip (f) {
+        this._skips.push(f)
+        return this
+    }
+
     limit (limit) {
         this._limit = + limit
         return this
@@ -602,6 +621,7 @@ class IteratorBuilder {
             inclusive: this._inclusive,
             direction: this._reversed ? 'reverse' : 'forward',
             joins: this._joins.slice(),
+            skips: this._skips.slice(),
             terminators: this._terminators.slice()
         }
         if (this._limit != null) {
