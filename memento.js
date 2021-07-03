@@ -601,6 +601,11 @@ class IteratorBuilder {
         return this
     }
 
+    // Something of a kludge to implement non-inclusive index cursors where we
+    // want to skip over anything that matches the key, but we are locating the
+    // key because it is a partial match. Can't we do this by looking for the
+    // first entry greater than though rather than skipping resolved results?
+    // That makes more sense, but this will get IndexedDB out the door.
     skip (f) {
         this._skips.push(f)
         return this
