@@ -448,6 +448,7 @@ class MutatorIterator extends AmalgamatorIterator {
 
     //
     inner () {
+        debugger
         const direction = this.direction == 'reverse' ? -1 : 1
         for (;;) {
             if (this.manipulation.series != this.series) {
@@ -486,10 +487,21 @@ class MutatorIterator extends AmalgamatorIterator {
                 return { done: true, value: null }
             }
             const comparator = this.manipulation.store.amalgamator.comparator.stage.key
+            // TODO Reverse iteration is not as simple as multiplying by
+            // direction. To keep this simple, we would need a reverse iterator
+            // that compared the user key descending and the version material
+            // asending. Easy enough to construct using ascension.
             if (candidates.length == 2) {
-                const compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) * direction
-                if (compare > 0) {
-                    candidates.push(candidates.shift())
+                if (getter(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) == 0) {
+                    const compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key)
+                    if (compare > 0) {
+                        candidates.push(candidates.shift())
+                    }
+                } else {
+                    const compare = comparator(candidates[0].array[candidates[0].index].key, candidates[1].array[candidates[1].index].key) * direction
+                    if (compare > 0) {
+                        candidates.push(candidates.shift())
+                    }
                 }
             }
             const candidate = candidates.shift()
