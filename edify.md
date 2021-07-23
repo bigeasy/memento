@@ -74,9 +74,10 @@ const Memento = require('..')
 
 const path = require('path')
 const fs = require('fs').promises
+const { coalesce } = require('extant')
 
 const directory = path.resolve(__dirname, './tmp/readme')
-await fs.rmdir(directory, { recursive: true })
+await coalesce(fs.rm, fs.rmdir).call(fs, directory, { force: true, recursive: true })
 await fs.mkdir(directory, { recursive: true })
 ```
 

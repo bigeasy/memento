@@ -1469,7 +1469,7 @@ class Memento {
             await journalist.dispose()
         }
         // Now we can hold our breath and obliterate the temporary directory.
-        await fs.rmdir(path.join(directory, 'staging'), { recursive: true })
+        await fs.rm(path.join(directory, 'staging'), { force: true, recursive: true })
         // We determine if this is a Memento directory by looking at the
         // directory contents. It a strict match, but I won't know what to say
         // to users who mess with the database directory until I meet them and

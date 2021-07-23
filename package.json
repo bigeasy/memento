@@ -27,6 +27,7 @@
                             "b-tree":                       "2.0.0-alpha.112",
                             "constrain":                    "2.0.0-alpha.4",
                             "destructible":                 "7.0.0-alpha.67",
+                            "extant":                       "2.0.0-alpha.2",
                             "interrupt":                    "11.0.0-alpha.23",
                             "journalist":                   "0.1.28",
                             "keyify":                       "^3.0.0",

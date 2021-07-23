@@ -2,6 +2,7 @@ require('proof')(64, async okay => {
     const assert = require('assert')
 
     const { Future } = require('perhaps')
+    const { coalesce } = require('extant')
     const Interrupt = require('interrupt')
 
     const presidents = function () {
@@ -137,7 +138,7 @@ require('proof')(64, async okay => {
 
     const directory = path.resolve(__dirname, './tmp/memento')
 
-    await fs.rmdir(directory, { recursive: true })
+    await coalesce(fs.rm, fs.rmdir).call(fs, directory, { force: true, recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
     const trace = []

@@ -1,13 +1,14 @@
 require('proof')(2, async okay => {
     const path = require('path')
     const fs = require('fs').promises
+    const { coalesce } = require('extant')
 
     const Memento = require('..')
     const Destructible = require('destructible')
 
     const directory = path.resolve(__dirname, './tmp/issues')
 
-    await fs.rmdir(directory, { recursive: true })
+    await coalesce(fs.rm, fs.rmdir).call(fs, directory, { force: true, recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
     // https://github.com/bigeasy/memento/issues/106
