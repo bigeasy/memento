@@ -16,7 +16,7 @@ require('proof')(5, async okay => {
 
     const directory = path.resolve(__dirname, './tmp/memento')
 
-    await coalesce(fs.rm, fs.rmdir).call(fs, directory, { recursive: true })
+    await coalesce(fs.rm, fs.rmdir).call(fs, directory, { force: true, recursive: true })
     await fs.mkdir(directory, { recursive: true })
 
     destructible.ephemeral('test', async function () {
