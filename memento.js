@@ -448,7 +448,6 @@ class MutatorIterator extends AmalgamatorIterator {
 
     //
     inner () {
-        debugger
         const direction = this.direction == 'reverse' ? -1 : 1
         for (;;) {
             if (this.manipulation.series != this.series) {
@@ -1729,12 +1728,13 @@ class Memento {
             return extractors.map(extractor => extractor(parts[0]))
         }
 
-        const comparator = ascension(comparisons.map(part => {
+        const compare = comparisons.map(part => {
             return [
                 typeof part.type == 'string' ? this._comparators[part.type] : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        }))
+        })
+        const comparator = ascension(compare)
 
         const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
