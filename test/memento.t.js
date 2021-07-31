@@ -243,6 +243,7 @@ require('proof')(64, async okay => {
         })
 
         await memento.mutator(async function (mutator) {
+            debugger
             mutator.set('president', insert.shift())
 
             okay(await mutator.get('president', [ 1 ]), presidents[0], 'get')
@@ -332,6 +333,7 @@ require('proof')(64, async okay => {
 
         await memento.snapshot(async snapshot => {
             okay(await snapshot.get('president', [ 1 ]), presidents[0], 'get store snapshot')
+            debugger
             okay(await snapshot.get([ 'president', 'name' ], [ 'Washington', 'George' ]), presidents[0], 'get index snapshot')
 
             const gathered = []

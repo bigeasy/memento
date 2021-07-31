@@ -949,14 +949,14 @@ class Mutator extends Transaction {
         const mutation = this._mutations[name]
         if (mutation == null) {
             const store = this._memento._stores[name]
-            const indices = {}
+            const indices = new Map()
             for (const index in this._memento._stores[name].indices) {
-                indices[index] = {
+                indices.set(index, {
                     series: 1,
                     appends: [[]],
                     store: store.indices[index],
                     qualifier: [ name, index ]
-                }
+                })
             }
             // TODO No, get them as you need them, the index and such, do not
             // stuff them here.
@@ -965,7 +965,7 @@ class Mutator extends Transaction {
                 store: store,
                 appends: [[]],
                 qualifier: [ name ],
-                indices: indices
+                x_indices: indices
             }
         }
         return mutation
@@ -977,7 +977,7 @@ class Mutator extends Transaction {
     //
     _manipulation (name) {
         if (Array.isArray(name)) {
-            return this._mutator(name[0]).indices[name[1]]
+            return this._mutator(name[0]).x_indices.get(name[1])
         }
         return this._mutator(name)
     }
@@ -999,9 +999,8 @@ class Mutator extends Transaction {
         const { appends } = mutation
         if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
-            const { indices } = mutation
-            for (const name in indices) {
-                indices[name].appends.unshift([])
+            for (const index of mutation.x_indices.values()) {
+                index.appends.unshift([])
             }
             // **TODO** This is new.
             mutation.series++
@@ -1044,8 +1043,7 @@ class Mutator extends Transaction {
         const mutation = this._mutator(name)
         const key = mutation.store.amalgamator.primary.storage.extractor([ record ])
         this._append(mutation, 'insert', key, record, record)
-        for (const name in mutation.indices) {
-            const index = mutation.indices[name]
+        for (const index of mutation.x_indices.values()) {
             const key = index.store.extractor([ record ])
             this._append(index, 'insert', key, key, record)
         }
@@ -1142,6 +1140,7 @@ class Mutator extends Transaction {
 
     //
     async _commit (persistent = true) {
+        debugger
         const stack = Fracture.stack()
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
@@ -1284,12 +1283,13 @@ class Schema extends Mutator {
             create: true
         })
         const mutation = this._mutator(name[0])
-        const _index = mutation.indices[name[1]] = {
+        mutation.x_indices.set(name[1], {
             series: 1,
             appends: [[]],
             store: store.indices[name[1]],
             qualifier: [ name[0], name[1] ]
-        }
+        })
+        const _index = mutation.x_indices.get(name[1])
         // TODO This will be slow now, but I want to get it working. What I want
         // to do is use the size of the returned items array to get sets as
         // large as the largest page in the store and commit those in a chunk,
@@ -1657,7 +1657,7 @@ class Memento {
             // deletion record. You'll notice that we create the in-memory stage
             // for the index here, in one go, in a one liner that prepends all
             // the deletes to existing appends array.
-            if (Object.keys(mutation.indices).length != 0) {
+            if (mutation.x_indices.size != 0) {
                 const iterator = mutation.store.amalgamator.map(snapshot, mutation.appends[1], {
                     extractor: entry => {
                         return entry.key[0]
@@ -1666,9 +1666,10 @@ class Memento {
                 const trampoline = new Trampoline
                 while (! iterator.done) {
                     iterator.next(trampoline, entries => {
-                        for (const name in mutation.indices) {
+                        // TODO Tighten up.
+                        for (const index of mutation.x_indices.values()) {
                             const deletions = []
-                            const { amalgamator, extractor, comparator, keyLength } = mutation.indices[name].store
+                            const { amalgamator, extractor, comparator, keyLength } = index.store
                             for (const entry of entries) {
                                 for (const item of entry.items) {
                                     // **TODO** Why do I have to encase this in
@@ -1684,7 +1685,7 @@ class Memento {
                                     }
                                 }
                             }
-                            mutation.indices[name].appends[1] = deletions.concat(mutation.indices[name].appends[1])
+                            index.appends[1] = deletions.concat(index.appends[1])
                         }
                     })
                     while (trampoline.seek()) {
@@ -1697,13 +1698,12 @@ class Memento {
             // procedures and do not displace ourselves (Fracture talk.) Nor do
             // we wait on any Fracture futures.
             await mutation.store.amalgamator.merge(stack, transaction, mutation.appends[1])
-            const { indices } = mutation
-            for (const name in indices) {
-                await indices[name].store.amalgamator.merge(stack, transaction, indices[name].appends[1])
+            for (const index of mutation.x_indices.values()) {
+                await index.store.amalgamator.merge(stack, transaction, index.appends[1])
             }
             mutation.appends.pop()
-            for (const name in indices) {
-                indices[name].appends.pop()
+            for (const index of mutation.x_indices.values()) {
+                index.appends.pop()
             }
             mutation.series++
         }
