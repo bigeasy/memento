@@ -850,7 +850,7 @@ class Snapshot extends Transaction {
             return {
                 series: 1,
                 appends: [[]],
-                store: this._memento._stores[name[0]].indices[name[1]],
+                store: this._memento._stores[name[0]].x_indices.get(name[1]),
                 qualifier: name,
                 index: true
             }
@@ -866,7 +866,7 @@ class Snapshot extends Transaction {
 
     _get (name, key, trampoline, consume) {
         if (Array.isArray(name)) {
-            const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].indices[name[1]]
+            const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].x_indices.get(name[1])
             const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
                 return comparator(item.key[0].slice(0, keyLength), key) != 0
             }), 1)
@@ -950,12 +950,12 @@ class Mutator extends Transaction {
         if (mutation == null) {
             const store = this._memento._stores[name]
             const indices = new Map()
-            for (const index in this._memento._stores[name].indices) {
-                indices.set(index, {
+            for (const [ indexName, index ] of this._memento._stores[name].x_indices) {
+                indices.set(indexName, {
                     series: 1,
                     appends: [[]],
-                    store: store.indices[index],
-                    qualifier: [ name, index ]
+                    store: index,
+                    qualifier: [ name, indexName ]
                 })
             }
             // TODO No, get them as you need them, the index and such, do not
@@ -1268,7 +1268,7 @@ class Schema extends Mutator {
 
     async index (name, extraction, options = {}) {
         Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-        Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
+        Memento.Error.assert(! this._memento._stores[name[0]].x_indices.has(name[1]), [ 'ALREADY_EXISTS', 'index' ])
         const qualifier = path.join('staging', `index.${this._temporary++}`)
         const directory = this._memento.directory
         const comparisons = this._comparisons(extraction)
@@ -1286,7 +1286,7 @@ class Schema extends Mutator {
         mutation.x_indices.set(name[1], {
             series: 1,
             appends: [[]],
-            store: store.indices[name[1]],
+            store: store.x_indices.get(name[1]),
             qualifier: [ name[0], name[1] ]
         })
         const _index = mutation.x_indices.get(name[1])
@@ -1310,10 +1310,10 @@ class Schema extends Mutator {
         if (Array.isArray(from)) {
             Memento.Error.assert(from[0] == to[0], 'INVALID_RENAME')
             Memento.Error.assert(this._memento._stores[from[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-            Memento.Error.assert(this._memento._stores[from[0]].indices[from[1]] != null, [ 'DOES_NOT_EXIST', 'index' ])
-            Memento.Error.assert(this._memento._stores[to[0]].indices[to[1]] == null, [ 'ALREADY_EXISTS', 'index' ])
-            this._memento._stores[to[0]].indices[to[1]] = this._memento._stores[from[0]].indices[from[1]]
-            delete this._memento._stores[from[0]].indices[from[1]]
+            Memento.Error.assert(this._memento._stores[from[0]].x_indices.has(from[1]), [ 'DOES_NOT_EXIST', 'index' ])
+            Memento.Error.assert(! this._memento._stores[to[0]].x_indices.has(to[1]), [ 'ALREADY_EXISTS', 'index' ])
+            this._memento._stores[to[0]].x_indices.set(to[1], this._memento._stores[from[0]].x_indices.get(from[1]))
+            this._memento._stores[from[0]].x_indices.delete(from[1])
             this._operations.push({ method: 'rename', type: 'index', from, to })
         } else {
             Memento.Error.assert(this._memento._stores[from] != null, [ 'DOES_NOT_EXIST', 'store' ])
@@ -1327,7 +1327,7 @@ class Schema extends Mutator {
     async remove (name) {
         if (Array.isArray(name)) {
             Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-            Memento.Error.assert(this._memento._stores[name[0]].indices[name[1]] != null, [ 'DOES_NOT_EXIST', 'index' ])
+            Memento.Error.assert(this._memento._stores[name[0]].x_indices.has(name[1]), [ 'DOES_NOT_EXIST', 'index' ])
             const qualifier = path.join('staging', `index.${this._temporary++}`)
             this._operations.push({ method: 'remove', type: 'index', name, qualifier })
             delete this._memento._stores[name]
@@ -1635,7 +1635,7 @@ class Memento {
     }
 
     indices (name) {
-        return Object.keys(this._stores[name].indices)
+        return [ ...this._stores[name].x_indices.keys() ]
     }
 
     //
@@ -1783,7 +1783,7 @@ class Memento {
         this._stores[name] = {
             qualifier,
             amalgamator,
-            indices: {},
+            x_indices: new Map,
             comparisons,
             comparator,
             getter: whittle(comparator, key => key[0])
@@ -1874,11 +1874,11 @@ class Memento {
             } (i + 1))
         }
 
-        this._stores[name[0]].indices[name[1]] = {
+        this._stores[name[0]].x_indices.set(name[1], {
             amalgamator, comparator, extractor, partials, qualifier,
             keyLength: key.comparisons.length,
             getter: partials[key.comparisons.length - 1]
-        }
+        })
     }
 
     async snapshot (block) {
