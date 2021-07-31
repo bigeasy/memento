@@ -850,7 +850,7 @@ class Snapshot extends Transaction {
             return {
                 series: 1,
                 appends: [[]],
-                store: this._memento._stores[name[0]].x_indices.get(name[1]),
+                store: this._memento._stores[name[0]].indices.get(name[1]),
                 qualifier: name,
                 index: true
             }
@@ -866,7 +866,7 @@ class Snapshot extends Transaction {
 
     _get (name, key, trampoline, consume) {
         if (Array.isArray(name)) {
-            const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].x_indices.get(name[1])
+            const { amalgamator, keyLength, comparator } = this._memento._stores[name[0]].indices.get(name[1])
             const iterator = mvcc.satiate(mvcc.constrain(amalgamator.iterator(this._transaction, 'forward', key, true), item => {
                 return comparator(item.key[0].slice(0, keyLength), key) != 0
             }), 1)
@@ -950,7 +950,7 @@ class Mutator extends Transaction {
         if (mutation == null) {
             const store = this._memento._stores[name]
             const indices = new Map()
-            for (const [ indexName, index ] of this._memento._stores[name].x_indices) {
+            for (const [ indexName, index ] of this._memento._stores[name].indices) {
                 indices.set(indexName, {
                     series: 1,
                     appends: [[]],
@@ -965,7 +965,7 @@ class Mutator extends Transaction {
                 store: store,
                 appends: [[]],
                 qualifier: [ name ],
-                x_indices: indices
+                indices: indices
             }
         }
         return mutation
@@ -977,7 +977,7 @@ class Mutator extends Transaction {
     //
     _manipulation (name) {
         if (Array.isArray(name)) {
-            return this._mutator(name[0]).x_indices.get(name[1])
+            return this._mutator(name[0]).indices.get(name[1])
         }
         return this._mutator(name)
     }
@@ -999,7 +999,7 @@ class Mutator extends Transaction {
         const { appends } = mutation
         if (appends[0].length >= max && appends.length == 1) {
             mutation.appends.unshift([])
-            for (const index of mutation.x_indices.values()) {
+            for (const index of mutation.indices.values()) {
                 index.appends.unshift([])
             }
             // **TODO** This is new.
@@ -1043,7 +1043,7 @@ class Mutator extends Transaction {
         const mutation = this._mutator(name)
         const key = mutation.store.amalgamator.primary.storage.extractor([ record ])
         this._append(mutation, 'insert', key, record, record)
-        for (const index of mutation.x_indices.values()) {
+        for (const index of mutation.indices.values()) {
             const key = index.store.extractor([ record ])
             this._append(index, 'insert', key, key, record)
         }
@@ -1268,7 +1268,7 @@ class Schema extends Mutator {
 
     async index (name, extraction, options = {}) {
         Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-        Memento.Error.assert(! this._memento._stores[name[0]].x_indices.has(name[1]), [ 'ALREADY_EXISTS', 'index' ])
+        Memento.Error.assert(! this._memento._stores[name[0]].indices.has(name[1]), [ 'ALREADY_EXISTS', 'index' ])
         const qualifier = path.join('staging', `index.${this._temporary++}`)
         const directory = this._memento.directory
         const comparisons = this._comparisons(extraction)
@@ -1283,13 +1283,13 @@ class Schema extends Mutator {
             create: true
         })
         const mutation = this._mutator(name[0])
-        mutation.x_indices.set(name[1], {
+        mutation.indices.set(name[1], {
             series: 1,
             appends: [[]],
-            store: store.x_indices.get(name[1]),
+            store: store.indices.get(name[1]),
             qualifier: [ name[0], name[1] ]
         })
-        const _index = mutation.x_indices.get(name[1])
+        const _index = mutation.indices.get(name[1])
         // TODO This will be slow now, but I want to get it working. What I want
         // to do is use the size of the returned items array to get sets as
         // large as the largest page in the store and commit those in a chunk,
@@ -1310,10 +1310,10 @@ class Schema extends Mutator {
         if (Array.isArray(from)) {
             Memento.Error.assert(from[0] == to[0], 'INVALID_RENAME')
             Memento.Error.assert(this._memento._stores[from[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-            Memento.Error.assert(this._memento._stores[from[0]].x_indices.has(from[1]), [ 'DOES_NOT_EXIST', 'index' ])
-            Memento.Error.assert(! this._memento._stores[to[0]].x_indices.has(to[1]), [ 'ALREADY_EXISTS', 'index' ])
-            this._memento._stores[to[0]].x_indices.set(to[1], this._memento._stores[from[0]].x_indices.get(from[1]))
-            this._memento._stores[from[0]].x_indices.delete(from[1])
+            Memento.Error.assert(this._memento._stores[from[0]].indices.has(from[1]), [ 'DOES_NOT_EXIST', 'index' ])
+            Memento.Error.assert(! this._memento._stores[to[0]].indices.has(to[1]), [ 'ALREADY_EXISTS', 'index' ])
+            this._memento._stores[to[0]].indices.set(to[1], this._memento._stores[from[0]].indices.get(from[1]))
+            this._memento._stores[from[0]].indices.delete(from[1])
             this._operations.push({ method: 'rename', type: 'index', from, to })
         } else {
             Memento.Error.assert(this._memento._stores[from] != null, [ 'DOES_NOT_EXIST', 'store' ])
@@ -1327,7 +1327,7 @@ class Schema extends Mutator {
     async remove (name) {
         if (Array.isArray(name)) {
             Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
-            Memento.Error.assert(this._memento._stores[name[0]].x_indices.has(name[1]), [ 'DOES_NOT_EXIST', 'index' ])
+            Memento.Error.assert(this._memento._stores[name[0]].indices.has(name[1]), [ 'DOES_NOT_EXIST', 'index' ])
             const qualifier = path.join('staging', `index.${this._temporary++}`)
             this._operations.push({ method: 'remove', type: 'index', name, qualifier })
             delete this._memento._stores[name]
@@ -1635,7 +1635,7 @@ class Memento {
     }
 
     indices (name) {
-        return [ ...this._stores[name].x_indices.keys() ]
+        return [ ...this._stores[name].indices.keys() ]
     }
 
     //
@@ -1657,7 +1657,7 @@ class Memento {
             // deletion record. You'll notice that we create the in-memory stage
             // for the index here, in one go, in a one liner that prepends all
             // the deletes to existing appends array.
-            if (mutation.x_indices.size != 0) {
+            if (mutation.indices.size != 0) {
                 const iterator = mutation.store.amalgamator.map(snapshot, mutation.appends[1], {
                     extractor: entry => {
                         return entry.key[0]
@@ -1667,7 +1667,7 @@ class Memento {
                 while (! iterator.done) {
                     iterator.next(trampoline, entries => {
                         // TODO Tighten up.
-                        for (const index of mutation.x_indices.values()) {
+                        for (const index of mutation.indices.values()) {
                             const deletions = []
                             const { amalgamator, extractor, comparator, keyLength } = index.store
                             for (const entry of entries) {
@@ -1698,11 +1698,11 @@ class Memento {
             // procedures and do not displace ourselves (Fracture talk.) Nor do
             // we wait on any Fracture futures.
             await mutation.store.amalgamator.merge(stack, transaction, mutation.appends[1])
-            for (const index of mutation.x_indices.values()) {
+            for (const index of mutation.indices.values()) {
                 await index.store.amalgamator.merge(stack, transaction, index.appends[1])
             }
             mutation.appends.pop()
-            for (const index of mutation.x_indices.values()) {
+            for (const index of mutation.indices.values()) {
                 index.appends.pop()
             }
             mutation.series++
@@ -1783,7 +1783,7 @@ class Memento {
         this._stores[name] = {
             qualifier,
             amalgamator,
-            x_indices: new Map,
+            indices: new Map,
             comparisons,
             comparator,
             getter: whittle(comparator, key => key[0])
@@ -1874,7 +1874,7 @@ class Memento {
             } (i + 1))
         }
 
-        this._stores[name[0]].x_indices.set(name[1], {
+        this._stores[name[0]].indices.set(name[1], {
             amalgamator, comparator, extractor, partials, qualifier,
             keyLength: key.comparisons.length,
             getter: partials[key.comparisons.length - 1]
