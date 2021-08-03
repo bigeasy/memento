@@ -126,3 +126,34 @@ require('proof')(2, async okay => {
 // snapshot callback function. If you attempt to save it and use later you will get
 // undefined behavior. Currently, there are no assertions to keep you from doing
 // this, just don't do it.
+
+// ### Insert and Delete
+//
+// ### Stores and Indices
+//
+// ### Cursors and Iteration
+//
+// ### Snapshots versus Mutators
+//
+// ### Inner and Outer Joins
+//
+// ### Migrations
+//
+// ### API
+//
+// `memento = Memento.open(options, async upgrade => {})`
+//
+//  * `options`
+//      * `destructible` &mdash; Optionsl instance of Destructible for structured
+//         concurrency management of the Memento instance.
+//      * `turnstile` &mdash; Optional Turnstile to manage parallel writes to file
+//         system.
+//      * `directory` &mdash; Directory in which to store data files.
+//      * `version` &mdash; Migration version.
+//      * `comparisons` &mdash; Optional of one or more comparision functions to use
+//         for collation.
+//  * `upgrade` &mdash;
+//
+// `memento.snapshot(async snapshot => {})`
+//
+// `memento.mutator(async mutator => {})`

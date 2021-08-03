@@ -37,13 +37,13 @@ generally looks like this.
 ```javascript
 //{ "code": { "tests": 2 }, "text": { "tests": 4  } }
 require('proof')(%(tests)d, async okay => {
-    //{ "include": "test" }
-    //{ "include": "testDisplay" }
+    //{ "include": "test", "mode": "code" }
+    //{ "include": "proof", "mode": "text" }
 })
 ```
 
 ```javascript
-//{ "name": "testDisplay", "mode": "text" }
+//{ "name": "proof", "mode": "text" }
 okay('always okay')
 okay(true, 'okay if true')
 okay(1, 1, 'okay if equal')
@@ -191,3 +191,34 @@ When you are done with Memento you close it.
 //{ "name": "introduction" }
 await memento.close()
 ```
+
+### Insert and Delete
+
+### Stores and Indices
+
+### Cursors and Iteration
+
+### Snapshots versus Mutators
+
+### Inner and Outer Joins
+
+### Migrations
+
+### API
+
+`memento = Memento.open(options, async upgrade => {})`
+
+ * `options`
+     * `destructible` &mdash; Optionsl instance of Destructible for structured
+        concurrency management of the Memento instance.
+     * `turnstile` &mdash; Optional Turnstile to manage parallel writes to file
+        system.
+     * `directory` &mdash; Directory in which to store data files.
+     * `version` &mdash; Migration version.
+     * `comparisons` &mdash; Optional of one or more comparision functions to use
+        for collation.
+ * `upgrade` &mdash;
+
+`memento.snapshot(async snapshot => {})`
+
+`memento.mutator(async mutator => {})`
