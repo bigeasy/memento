@@ -209,7 +209,7 @@ await memento.close()
 `memento = Memento.open(options, async upgrade => {})`
 
  * `options`
-     * `destructible` &mdash; Optionsl instance of Destructible for structured
+     * `destructible` &mdash; Optional instance of Destructible for structured
         concurrency management of the Memento instance.
      * `turnstile` &mdash; Optional Turnstile to manage parallel writes to file
         system.
