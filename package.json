@@ -39,7 +39,7 @@
     },
     "devDependencies":
     {
-                            "perhaps":                      "0.0.11",
+                            "perhaps":                      "0.0.12",
                             "proof":                        "^9.0.2"
     },
     "main":                 "memento",
