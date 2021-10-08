@@ -1733,7 +1733,7 @@ class Memento {
                 typeof part.type == 'string' ? this._comparators[part.type] : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        })
+        }).flat()
         const comparator = ascension(compare)
 
         const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
@@ -1820,7 +1820,7 @@ class Memento {
                     : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        }))
+        }).flat())
 
         const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
