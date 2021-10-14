@@ -31,8 +31,6 @@
 // generally looks like this.
 
 require('proof')(11, async okay => {
-    const Memento = require('..')
-
     const path = require('path')
     const fs = require('fs').promises
     const { coalesce } = require('extant')
@@ -265,6 +263,8 @@ require('proof')(11, async okay => {
 // code sections of the readme.
 
 // The `'memento'` module exports a single `Memento` object.
+
+const Memento = require('..')
 
 // You'll notice that the `mutator.set()` method is a synchronous function. This is
 // because we want inserts and deletes to be fast. Rather than performing

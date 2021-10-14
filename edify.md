@@ -64,14 +64,12 @@ node test/readme.t.js
 The `'memento'` module exports a single `Memento` object.
 
 ```javascript
-//{ "name": "displayedRequire", "mode": "text" }
-const Memento = require('memento')
+//{ "name": "comparator", "code": { "path": "'..'" }, "text": { "path": "'memento'" } }
+const Memento = require(%(path)s)
 ```
 
 ```javascript
 //{ "name": "test", "mode": "code" }
-const Memento = require('..')
-
 const path = require('path')
 const fs = require('fs').promises
 const { coalesce } = require('extant')
