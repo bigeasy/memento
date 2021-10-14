@@ -617,6 +617,10 @@ class IteratorBuilder {
     // key because it is a partial match. Can't we do this by looking for the
     // first entry greater than though rather than skipping resolved results?
     // That makes more sense, but this will get IndexedDB out the door.
+
+    // TODO Is this still necessary? I thought I'd found a way to get around
+    // using it, or else fixed a bug that was causing the expected behavior to
+    // fail.
     skip (f) {
         this._skips.push(f)
         return this

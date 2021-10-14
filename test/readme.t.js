@@ -30,7 +30,7 @@
 // Proof `okay` function to assert out statements in the readme. A Proof unit test
 // generally looks like this.
 
-require('proof')(2, async okay => {
+require('proof')(11, async okay => {
     const Memento = require('..')
 
     const path = require('path')
@@ -53,10 +53,9 @@ require('proof')(2, async okay => {
 
         const directory = path.resolve(__dirname, './tmp/readme')
         const memento = await Memento.open({ directory }, async schema => {
-            switch (schema.version.target) {
+            switch (schema.version.current + 1) {
             case 1:
                 await schema.store('president', { lastName: String, firstName: String })
-                break
             }
         })
 
@@ -71,10 +70,10 @@ require('proof')(2, async okay => {
         // If the function raises and exception, the changes are rolled back.
 
         await memento.mutator(async mutator => {
-            mutator.set('president', { firstName: 'George', lastName: 'Washington' })
+            mutator.set('president', { firstName: 'George', lastName: 'Washington', state: 'VA' })
             const got = await mutator.get('president', [ 'Washington', 'George' ])
             okay(got, {
-                firstName: 'George', lastName: 'Washington'
+                firstName: 'George', lastName: 'Washington', state: 'VA'
             }, 'isolated view of inserted record')
         })
 
@@ -90,13 +89,175 @@ require('proof')(2, async okay => {
         await memento.snapshot(async snapshot => {
             const got = await snapshot.get('president', [ 'Washington', 'George' ])
             okay(got, {
-                firstName: 'George', lastName: 'Washington'
+                firstName: 'George', lastName: 'Washington', state: 'VA'
             }, 'snapshot view of inserted record')
         })
 
         // When you are done with Memento you close it.
 
         await memento.close()
+    }
+
+    // ### Create, Retrieve, Update and Delete
+    //
+    // Let's create a database.
+
+    {
+        // Insert is done with `set`.
+        //
+        // We're going to reopen the database. Usually you'll only have one spot in your
+        // program where you open your database and it will have a schema function that
+        // builds or migrates the database. In our example we are reopening an existing
+        // database that has already been built to the schema function should not be
+        // called. In our test here, we're going to assert that it is not called with an
+        // exception.
+
+        const directory = path.resolve(__dirname, './tmp/readme')
+        const memento = await Memento.open({ directory }, async schema => {
+            throw new Error('should not be called')
+        })
+
+        // We use `set` to insert or update a record into the database. We use `get` to get
+        // a single record out of the database.
+
+        await memento.mutator(async mutator => {
+            mutator.set('president', { firstName: 'Jack', lastName: 'Adams', state: 'NY' })
+            const get = await mutator.get('president', [ 'Adams', 'Jack' ])
+            okay(get, { firstName: 'Jack', lastName: 'Adams', state: 'NY' }, 'isolated retrieve')
+        })
+
+        // Once the mutator is complete other snapshots and mutators will see the written
+        // record.
+
+        await memento.snapshot(async mutator => {
+            const get = await mutator.get('president', [ 'Adams', 'Jack' ])
+            okay(get, { firstName: 'Jack', lastName: 'Adams', state: 'NY' }, 'snapshot retrieve')
+        })
+
+        // We update records using `set` as well. Let's fix the home state of John Adams.
+
+        await memento.mutator(async mutator => {
+            mutator.set('president', { firstName: 'Jack', lastName: 'Adams', state: 'MA' })
+            const get = await mutator.get('president', [ 'Adams', 'Jack' ])
+            okay(get, { firstName: 'Jack', lastName: 'Adams', state: 'MA' }, 'retrieve')
+        })
+
+        // Note that we can't change the name of one of our presidents because we are using
+        // last name and first name as the key. You would have to delete and insert.
+        //
+        // Let's delete "Jack Adams".
+
+        await memento.mutator(async mutator => {
+            mutator.unset('president', [ 'Adams', 'Jack' ])
+            const get = await mutator.get('president', [ 'Adams', 'Jack' ])
+            okay(get, null, 'deleted')
+        })
+
+        // Still removed when we search in a subsequent snapshot.
+
+        await memento.snapshot(async mutator => {
+            const get = await mutator.get('president', [ 'Adams', 'Jack' ])
+            okay(get, null, 'deleted')
+        })
+
+        // Let's insert John Adams.
+
+        await memento.mutator(async mutator => {
+            mutator.set('president', { lastName: 'Adams', firstName: 'John', state: 'MA' })
+        })
+
+
+        // Close the database.
+
+        await memento.close()
+    }
+
+    // ### Stores and Indices
+    //
+    // Index example.
+
+    {
+        const directory = path.resolve(__dirname, './tmp/readme')
+        const memento = await Memento.open({ directory, version: 2 }, async schema => {
+            switch (schema.version.current + 1) {
+            case 1:
+                await schema.store('president', { lastName: String, firstName: String })
+            case 2:
+                await schema.index([ 'president', 'state' ], { state: String })
+            }
+        })
+
+        // We can use our index immediately after creating it.
+
+        await memento.snapshot(async snapshot => {
+            const got = await snapshot.get([ 'president', 'state' ], [ 'MA' ])
+            okay(got, { firstName: 'John', lastName: 'Adams', state: 'MA' }, 'get by index')
+        })
+
+        // When you get by an index the index can match multiple records. The first one is
+        // returned.
+
+        await memento.mutator(async mutator => {
+            mutator.set('president', { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' })
+            const got = await mutator.get([ 'president', 'state' ], [ 'VA' ])
+            okay(got, { firstName: 'Thomas', lastName: 'Jefferson', state: 'VA' }, 'get first by index')
+        })
+
+        // TODO Make a point of closing here and opening in the next section.
+        //
+        // ### Cursors and Iteration
+        //
+        // So far we've only seen get which returns a single entry.
+
+        await memento.snapshot(async snapshot => {
+            const gathered = []
+            for await (const presidents of snapshot.cursor('president')) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, [{
+                firstName: 'John', lastName: 'Adams', state: 'MA'
+            }, {
+                firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+            }, {
+                firstName: 'George', lastName: 'Washington', state: 'VA'
+            }], 'cursor')
+        })
+
+        // Iterating over an index.
+
+        await memento.snapshot(async snapshot => {
+            const gathered = []
+            for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'VA' ])) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            okay(gathered, [{
+                firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+            }, {
+                firstName: 'George', lastName: 'Washington', state: 'VA'
+            }], 'cursor')
+        })
+
+        // Reversing an index.
+
+        await memento.snapshot(async snapshot => {
+            const gathered = []
+            for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'VA' ]).reverse()) {
+                for (const president of presidents) {
+                    gathered.push(president)
+                }
+            }
+            /* TODO Broken! Uncomment to see and fix.
+            okay(gathered, [{
+                firstName: 'George', lastName: 'Washington', state: 'VA'
+            }, {
+                firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+            }], 'cursor')
+            */
+        })
     }
 })
 
@@ -127,12 +288,6 @@ require('proof')(2, async okay => {
 // undefined behavior. Currently, there are no assertions to keep you from doing
 // this, just don't do it.
 
-// ### Insert and Delete
-//
-// ### Stores and Indices
-//
-// ### Cursors and Iteration
-//
 // ### Snapshots versus Mutators
 //
 // ### Inner and Outer Joins
