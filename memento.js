@@ -24,7 +24,7 @@ const assert = require('assert')
 const Keyify = require('keyify')
 const Interrupt = require('interrupt')
 
-const Trampoline = require('reciprocate')
+const { Trampoline } = require('reciprocate')
 const Destructible = require('destructible')
 
 const Strata = require('b-tree')
@@ -57,10 +57,11 @@ const mvcc = {
 }
 
 // **TODO** You should only need to keep one of these.
+// **TODO** Ignoring `high`.
 const find = function () {
     const find = require('b-tree/find')
     return function (comparator, array, key, low, high) {
-        const index = find(comparator, array, key, low, high)
+        const index = find(comparator, array, key, low, Number.MAX_SAFE_INTEGER)
         return index < 0
             ? { index: ~index, found: false }
             : { index: index, found: true }
