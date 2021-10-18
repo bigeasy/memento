@@ -56,12 +56,10 @@ const mvcc = {
     constrain: require('constrain/iterator')
 }
 
-// **TODO** You should only need to keep one of these.
-// **TODO** Ignoring `high`.
 const find = function () {
     const find = require('b-tree/find')
-    return function (comparator, array, key, low, high) {
-        const index = find(comparator, array, key, low, Number.MAX_SAFE_INTEGER)
+    return function (comparator, array, key, low, reversal) {
+        const index = find(comparator, array, key, low, reversal)
         return index < 0
             ? { index: ~index, found: false }
             : { index: index, found: true }
@@ -469,7 +467,9 @@ class MutatorIterator extends AmalgamatorIterator {
             const getter = this.manipulation.store.getter
             let { index, found } = this.key == null
                 ? { index: direction == 1 ? 0 : array.length, found: false }
-                : find(getter, array, [ this.key ], 0, array.length - 1)
+                : find(getter, array, [ this.key ], 0, direction == 1
+                    ? this.inclusive ? 1 : -1
+                    : this.inclusive ? -1 : 1)
             // Unfound puts us at the insert position so that when iterating
             // backwards we are at the first in-memory value greater than the
             // key, backing up will put us at the first in-memory value less
@@ -1079,7 +1079,7 @@ class Mutator extends Transaction {
     _getFromMemory (mutation, key) {
         const { amalgamator, getter } = mutation.store
         for (const array of mutation.appends) {
-            const { index, found } = find(getter, array, [ key ], 0, array.length - 1)
+            const { index, found } = find(getter, array, [ key ], 0, 1)
             if (found) {
                 return array[index]
             }
@@ -1790,7 +1790,7 @@ class Memento {
             indices: new Map,
             comparisons,
             comparator,
-            getter: whittle(comparator, key => key[0])
+            getter: whittle(comparator, key => key[0], true)
         }
     }
 
@@ -1871,10 +1871,11 @@ class Memento {
             }
         })
 
+        // TODO Why do I need all these?
         const partials = []
         for (let i = 0; i < key.comparisons.length; i++) {
             partials.push(function (end) {
-                return whittle(comparator, key => key[0].slice(0, end))
+                return whittle(comparator, key => key[0].slice(0, end), true)
             } (i + 1))
         }
 

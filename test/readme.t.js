@@ -30,7 +30,7 @@
 // Proof `okay` function to assert out statements in the readme. A Proof unit test
 // generally looks like this.
 
-require('proof')(11, async okay => {
+require('proof')(12, async okay => {
     const path = require('path')
     const fs = require('fs').promises
     const { coalesce } = require('extant')
@@ -223,6 +223,13 @@ require('proof')(11, async okay => {
             }], 'cursor')
         })
 
+        // Let's add some more presidents for the sake of the index search.
+
+        await memento.mutator(async mutator => {
+            mutator.set('president', { firstName: 'James', lastName: 'Monroe', state: 'VA' })
+            mutator.set('president', { firstName: 'John Quincy', lastName: 'Adams', state: 'MA' })
+        })
+
         // Iterating over an index.
 
         await memento.snapshot(async snapshot => {
@@ -235,6 +242,8 @@ require('proof')(11, async okay => {
             okay(gathered, [{
                 firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
             }, {
+                firstName: 'James', lastName: 'Monroe', state: 'VA'
+            }, {
                 firstName: 'George', lastName: 'Washington', state: 'VA'
             }], 'cursor')
         })
@@ -243,18 +252,16 @@ require('proof')(11, async okay => {
 
         await memento.snapshot(async snapshot => {
             const gathered = []
-            for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'VA' ]).reverse()) {
+            for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'MA' ]).reverse()) {
                 for (const president of presidents) {
                     gathered.push(president)
                 }
             }
-            /* TODO Broken! Uncomment to see and fix.
             okay(gathered, [{
-                firstName: 'George', lastName: 'Washington', state: 'VA'
+                firstName: 'John Quincy', lastName: 'Adams', state: 'MA'
             }, {
-                firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+                firstName: 'John', lastName: 'Adams', state: 'MA'
             }], 'cursor')
-            */
         })
     }
 })

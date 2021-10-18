@@ -303,6 +303,15 @@ await memento.snapshot(async snapshot => {
 })
 ```
 
+Let's add some more presidents for the sake of the index search.
+
+```javascript
+await memento.mutator(async mutator => {
+    mutator.set('president', { firstName: 'James', lastName: 'Monroe', state: 'VA' })
+    mutator.set('president', { firstName: 'John Quincy', lastName: 'Adams', state: 'MA' })
+})
+```
+
 Iterating over an index.
 
 ```javascript
@@ -316,6 +325,8 @@ await memento.snapshot(async snapshot => {
     okay(gathered, [{
         firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
     }, {
+        firstName: 'James', lastName: 'Monroe', state: 'VA'
+    }, {
         firstName: 'George', lastName: 'Washington', state: 'VA'
     }], 'cursor')
 })
@@ -326,18 +337,16 @@ Reversing an index.
 ```javascript
 await memento.snapshot(async snapshot => {
     const gathered = []
-    for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'VA' ]).reverse()) {
+    for await (const presidents of snapshot.cursor([ 'president', 'state' ], [ 'MA' ]).reverse()) {
         for (const president of presidents) {
             gathered.push(president)
         }
     }
-    /* TODO Broken! Uncomment to see and fix.
     okay(gathered, [{
-        firstName: 'George', lastName: 'Washington', state: 'VA'
+        firstName: 'John Quincy', lastName: 'Adams', state: 'MA'
     }, {
-        firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+        firstName: 'John', lastName: 'Adams', state: 'MA'
     }], 'cursor')
-    */
 })
 ```
 
