@@ -1145,7 +1145,6 @@ class Mutator extends Transaction {
 
     //
     async _commit (persistent = true) {
-        debugger
         const stack = Fracture.stack()
         // All Memento mutations created by this Mutator.
         const mutations = Object.keys(this._mutations).map(name => this._mutations[name])
@@ -1739,7 +1738,7 @@ class Memento {
                 part.direction
             ]
         }).flat()
-        const comparator = ascension(compare)
+        const comparator = ascension(compare, true)
 
         const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
@@ -1825,7 +1824,7 @@ class Memento {
                     : ASCENSION_TYPE[part.type],
                 part.direction
             ]
-        }).flat())
+        }).flat(), true)
 
         const amalgamator = await this._rotator.open(Fracture.stack(), qualifier.replace('/', '.'), {
             handles: options.handles.subordinate(),
