@@ -1,4 +1,4 @@
-require('proof')(13, async okay => {
+require('proof')(17, async okay => {
     const path = require('path')
     const fs = require('fs').promises
     const { coalesce } = require('extant')
@@ -245,6 +245,75 @@ require('proof')(13, async okay => {
                 }, {
                     string: 'c', number: 3
                 }], 'forward in memory inclusive')
+            })
+            await memento.close()
+            destructible.destroy()
+        })
+
+        await destructible.promise
+    }
+    // https://github.com/bigeasy/memento/issues/148
+    {
+        await coalesce(fs.rm, fs.rmdir).call(fs, directory, { force: true, recursive: true })
+        await fs.mkdir(directory, { recursive: true })
+
+        const destructible = new Destructible('compound.reverse.index')
+        destructible.durable('compound reverse index', async () => {
+            const memento = await Memento.open({
+                version: 1,
+                destructible: destructible.ephemeral('memento'),
+                directory: directory,
+            }, async schema => {
+                switch (schema.version.target) {
+                case 1:
+                    await schema.store('value', { string: String, number: Number })
+                    break
+                }
+            })
+            await memento.mutator(async mutator => {
+                mutator.set('value', { string: 'a', number: 1 })
+                mutator.set('value', { string: 'a', number: 2 })
+                mutator.set('value', { string: 'b', number: 1 })
+                mutator.set('value', { string: 'c', number: 1 })
+                mutator.set('value', { string: 'c', number: 2 })
+            })
+            await memento.mutator(async mutator => {
+                mutator.set('value', { string: 'c', number: 1, replaced: 'once' })
+                mutator.set('value', { string: 'c', number: 1, replaced: 'twice' })
+                mutator.set('value', { string: 'a', number: 2, replaced: 'once' })
+                mutator.set('value', { string: 'a', number: 2, replaced: 'twice' })
+                {
+                    const inclusive = await mutator.cursor('value', [ 'b' ]).array()
+                    okay(inclusive, [{
+                        string: 'b', number: 1
+                    }, {
+                        string: 'c', number: 1, replaced: 'twice'
+                    }, {
+                        string: 'c', number: 2
+                    }], 'double edit forward in memory inclusive')
+                    const exclusive = await mutator.cursor('value', [ 'b' ]).exclusive().array()
+                    okay(exclusive, [{
+                        string: 'c', number: 1, replaced: 'twice'
+                    }, {
+                        string: 'c', number: 2
+                    }], 'double edit forward in memory exclusive')
+                }
+                {
+                    const inclusive = await mutator.cursor('value', [ 'b' ]).reverse().array()
+                    okay(inclusive, [{
+                        string: 'b', number: 1
+                    }, {
+                        string: 'a', number: 2, replaced: 'twice'
+                    }, {
+                        string: 'a', number: 1
+                    }], 'double edit reverse in memory inclusive')
+                    const exclusive = await mutator.cursor('value', [ 'b' ]).reverse().exclusive().array()
+                    okay(exclusive, [{
+                        string: 'a', number: 2, replaced: 'twice'
+                    }, {
+                        string: 'a', number: 1
+                    }], 'dobule edit reversein memory inclusive')
+                }
             })
             await memento.close()
             destructible.destroy()
