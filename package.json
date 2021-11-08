@@ -22,7 +22,7 @@
     "dependencies":
     {
                             "amalgamate":                   "0.1.79",
-                            "ascension":                    "^3.0.0-alpha.11",
+                            "ascension":                    "^3.0.0-alpha.12",
                             "avenue":                       "0.6.17",
                             "b-tree":                       "2.0.0-alpha.125",
                             "constrain":                    "2.0.0-alpha.6",
