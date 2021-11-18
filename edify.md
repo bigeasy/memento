@@ -35,7 +35,7 @@ Proof `okay` function to assert out statements in the readme. A Proof unit test
 generally looks like this.
 
 ```javascript
-//{ "code": { "tests": 12 }, "text": { "tests": 4  } }
+//{ "code": { "tests": 13 }, "text": { "tests": 4  } }
 require('proof')(%(tests)d, async okay => {
     //{ "include": "test", "mode": "code" }
     //{ "include": "proof", "mode": "text" }
@@ -412,7 +412,72 @@ await memento.snapshot(async snapshot => {
 })
 ```
 
+We'll shutdown the database before moving onto isolation with snapshots and
+mutators.
+
+```javascript
+//{ "name": "indices" }
+await memento.close()
+```
+
 ### Snapshots versus Mutators
+
+You use mutators to change data. None of the changes made by the mutator are
+visible to any of the other snapshots or mutators until the mutator returns.
+
+```javascript
+//{ "name": "test", "mode": "code" }
+{
+    //{ "include": "isolation" }
+}
+```
+
+Let's reopen the database. In our program we'll have a single open stanza for a
+database so we'll repeat the schema update block here.
+
+**TODO** Maybe have an `openVersion1` and `openVersion2` function example.
+
+```javascript
+//{ "name": "isolation" }
+const directory = path.resolve(__dirname, './tmp/readme')
+const memento = await Memento.open({ directory, version: 2 }, async schema => {
+    switch (schema.version.current + 1) {
+    case 1:
+        await schema.store('president', { lastName: String, firstName: String })
+    case 2:
+        await schema.index([ 'president', 'state' ], { state: String })
+    }
+})
+```
+
+```javascript
+//{ "name": "isolation" }
+const resolves = {}
+
+const promises = {
+    wrote: new Promise(resolve => resolves.wrote = resolve),
+    reading: new Promise(resolve => resolves.reading = resolve)
+}
+
+const promise = memento.mutator(async mutator => {
+    await promises.reading
+    mutator.set('president', { firstName: 'Andrew', lastName: 'Jackson', state: 'SC' })
+    resolves.wrote()
+})
+
+await memento.snapshot(async snapshot => {
+    resolves.reading()
+    await promises.wrote
+    okay(await snapshot.get('president', [ 'Jackson', 'Andrew' ]), null, 'isolated write not visible')
+})
+```
+
+We'll close the database before moving onto innser and outer joins.
+
+```javascript
+//{ "name": "isolation" }
+await memento.close()
+```
 
 ### Inner and Outer Joins
 
