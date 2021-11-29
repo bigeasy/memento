@@ -310,7 +310,7 @@ require('proof')(13, async okay => {
             okay(await snapshot.get('president', [ 'Jackson', 'Andrew' ]), null, 'isolated write not visible')
         })
 
-        // We'll close the database before moving onto innser and outer joins.
+        // We'll close the database before moving onto inner and outer joins.
 
         await memento.close()
     }

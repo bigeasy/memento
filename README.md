@@ -400,7 +400,7 @@ await memento.snapshot(async snapshot => {
 })
 ```
 
-We'll close the database before moving onto innser and outer joins.
+We'll close the database before moving onto inner and outer joins.
 
 ```javascript
 await memento.close()
