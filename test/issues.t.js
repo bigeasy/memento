@@ -19,11 +19,11 @@ require('proof')(17, async okay => {
             const schema = async schema => {
                 switch (schema.version.target) {
                 case 1:
-                    await schema.store('one', { 'key': Number })
+                    await schema.create('one', { 'key': Number })
                     break
                 case 2:
                     await schema.rename('one', 'two')
-                    await schema.store('one', { 'key': String })
+                    await schema.create('one', { 'key': String })
                     break
                 }
             }
@@ -62,7 +62,7 @@ require('proof')(17, async okay => {
             const schema = async schema => {
                 switch (schema.version.target) {
                 case 1:
-                    await schema.store('one', { 'key': Number })
+                    await schema.create('one', { 'key': Number })
                     break
                 }
             }
@@ -125,7 +125,7 @@ require('proof')(17, async okay => {
             }, async schema => {
                 switch (schema.version.target) {
                 case 1:
-                    await schema.store('value', { string: String, number: Number })
+                    await schema.create('value', { string: String, number: Number })
                     break
                 }
             })
@@ -196,7 +196,7 @@ require('proof')(17, async okay => {
             }, async schema => {
                 switch (schema.version.target) {
                 case 1:
-                    await schema.store('value', { string: String, number: Number })
+                    await schema.create('value', { string: String, number: Number })
                     break
                 }
             })
@@ -266,7 +266,7 @@ require('proof')(17, async okay => {
             }, async schema => {
                 switch (schema.version.target) {
                 case 1:
-                    await schema.store('value', { string: String, number: Number })
+                    await schema.create('value', { string: String, number: Number })
                     break
                 }
             })

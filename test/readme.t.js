@@ -53,7 +53,7 @@ require('proof')(13, async okay => {
         const memento = await Memento.open({ directory }, async schema => {
             switch (schema.version.current + 1) {
             case 1:
-                await schema.store('president', { lastName: String, firstName: String })
+                await schema.create('president', { lastName: String, firstName: String })
             }
         })
 
@@ -179,9 +179,9 @@ require('proof')(13, async okay => {
         const memento = await Memento.open({ directory, version: 2 }, async schema => {
             switch (schema.version.current + 1) {
             case 1:
-                await schema.store('president', { lastName: String, firstName: String })
+                await schema.create('president', { lastName: String, firstName: String })
             case 2:
-                await schema.index([ 'president', 'state' ], { state: String })
+                await schema.create([ 'president', 'state' ], { state: String })
             }
         })
 
@@ -285,9 +285,9 @@ require('proof')(13, async okay => {
         const memento = await Memento.open({ directory, version: 2 }, async schema => {
             switch (schema.version.current + 1) {
             case 1:
-                await schema.store('president', { lastName: String, firstName: String })
+                await schema.create('president', { lastName: String, firstName: String })
             case 2:
-                await schema.index([ 'president', 'state' ], { state: String })
+                await schema.create([ 'president', 'state' ], { state: String })
             }
         })
 

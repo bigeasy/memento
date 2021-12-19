@@ -73,7 +73,7 @@ const directory = path.resolve(__dirname, './tmp/readme')
 const memento = await Memento.open({ directory }, async schema => {
     switch (schema.version.current + 1) {
     case 1:
-        await schema.store('president', { lastName: String, firstName: String })
+        await schema.create('president', { lastName: String, firstName: String })
     }
 })
 ```
@@ -252,9 +252,9 @@ const directory = path.resolve(__dirname, './tmp/readme')
 const memento = await Memento.open({ directory, version: 2 }, async schema => {
     switch (schema.version.current + 1) {
     case 1:
-        await schema.store('president', { lastName: String, firstName: String })
+        await schema.create('president', { lastName: String, firstName: String })
     case 2:
-        await schema.index([ 'president', 'state' ], { state: String })
+        await schema.create([ 'president', 'state' ], { state: String })
     }
 })
 ```
@@ -372,9 +372,9 @@ const directory = path.resolve(__dirname, './tmp/readme')
 const memento = await Memento.open({ directory, version: 2 }, async schema => {
     switch (schema.version.current + 1) {
     case 1:
-        await schema.store('president', { lastName: String, firstName: String })
+        await schema.create('president', { lastName: String, firstName: String })
     case 2:
-        await schema.index([ 'president', 'state' ], { state: String })
+        await schema.create([ 'president', 'state' ], { state: String })
     }
 })
 ```

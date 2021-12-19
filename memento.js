@@ -1252,8 +1252,15 @@ class Schema extends Mutator {
         return comparisons
     }
 
+    create (name, extraction, options = {}) {
+        if (Array.isArray(name)) {
+            return this._createIndex(name, extraction, options)
+        }
+        return this._createStore(name, extraction)
+    }
+
     // TODO Need a rollback interface.
-    async store (name, extraction) {
+    async _createStore (name, extraction) {
         Memento.Error.assert(this._memento._stores[name] == null, [ 'ALREADY_EXISTS', 'store' ])
         const qualifier = path.join('staging', `store.${this._temporary++}`)
         const comparisons = this._comparisons(extraction)
@@ -1270,7 +1277,7 @@ class Schema extends Mutator {
         })
     }
 
-    async index (name, extraction, options = {}) {
+    async _createIndex (name, extraction, options = {}) {
         Memento.Error.assert(this._memento._stores[name[0]] != null, [ 'DOES_NOT_EXIST', 'store' ])
         Memento.Error.assert(! this._memento._stores[name[0]].indices.has(name[1]), [ 'ALREADY_EXISTS', 'index' ])
         const qualifier = path.join('staging', `index.${this._temporary++}`)

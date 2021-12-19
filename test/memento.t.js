@@ -154,21 +154,21 @@ require('proof')(64, async okay => {
         }, async (schema) => {
             switch (schema.version.target) {
             case 1:
-                await schema.store('employee', { 'terms.0': Number })
-                await schema.index([ 'employee', 'moniker' ], {
+                await schema.create('employee', { 'terms.0': Number })
+                await schema.create([ 'employee', 'moniker' ], {
                     lastName: Memento.ASC, firstName: [ 'text' ]
                 })
                 await schema.rename('employee', 'president')
                 await schema.rename(['president', 'moniker' ], [ 'president', 'name' ])
                 break
             case 2:
-                await schema.store('state', { code: String })
+                await schema.create('state', { code: String })
                 for (const state of states) {
                     schema.set('state', state)
                 }
                 break
             case 3:
-                await schema.index([ 'president', 'state' ], { state: String })
+                await schema.create([ 'president', 'state' ], { state: String })
                 break
             case 4:
                 await schema.remove([ 'president', 'state' ])

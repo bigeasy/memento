@@ -30,7 +30,7 @@ require('proof')(5, async okay => {
         }, async (schema) => {
             switch (schema.version.target) {
             case 1:
-                await schema.store('store', { 'key': Number })
+                await schema.create('store', { 'key': Number })
                 break
             }
         })
