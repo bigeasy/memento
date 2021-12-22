@@ -408,6 +408,26 @@ await memento.close()
 
 ### Inner and Outer Joins
 
+```javascript
+const directory = path.resolve(__dirname, './tmp/readme')
+const memento = await Memento.open({ directory, version: 2 }, async schema => {
+    switch (schema.version.current + 1) {
+    case 1:
+        await schema.create('president', { lastName: String, firstName: String })
+    case 2:
+        await schema.create([ 'president', 'state' ], { state: String })
+    case 3:
+        await schema.create('state', { code: String })
+    }
+})
+```
+
+We'll close the database before moving onto migrations.
+
+```javascript
+await memento.close()
+```
+
 ### Migrations
 
 ### API

@@ -314,6 +314,26 @@ require('proof')(13, async okay => {
 
         await memento.close()
     }
+
+    // ### Inner and Outer Joins
+
+    {
+        const directory = path.resolve(__dirname, './tmp/readme')
+        const memento = await Memento.open({ directory, version: 2 }, async schema => {
+            switch (schema.version.current + 1) {
+            case 1:
+                await schema.create('president', { lastName: String, firstName: String })
+            case 2:
+                await schema.create([ 'president', 'state' ], { state: String })
+            case 3:
+                await schema.create('state', { code: String })
+            }
+        })
+
+        // We'll close the database before moving onto migrations.
+
+        await memento.close()
+    }
 })
 
 // You can run this unit test yourself to see the output from the various
@@ -345,8 +365,6 @@ const Memento = require('..')
 // undefined behavior. Currently, there are no assertions to keep you from doing
 // this, just don't do it.
 
-// ### Inner and Outer Joins
-//
 // ### Migrations
 //
 // ### API
