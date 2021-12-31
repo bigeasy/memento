@@ -400,6 +400,8 @@ await memento.snapshot(async snapshot => {
 })
 ```
 
+TODO Show that we can now do a snapshot and Andrew Jackson is present.
+
 We'll close the database before moving onto inner and outer joins.
 
 ```javascript
@@ -410,7 +412,7 @@ await memento.close()
 
 ```javascript
 const directory = path.resolve(__dirname, './tmp/readme')
-const memento = await Memento.open({ directory, version: 2 }, async schema => {
+const memento = await Memento.open({ directory, version: 3 }, async schema => {
     switch (schema.version.current + 1) {
     case 1:
         await schema.create('president', { lastName: String, firstName: String })
@@ -418,7 +420,40 @@ const memento = await Memento.open({ directory, version: 2 }, async schema => {
         await schema.create([ 'president', 'state' ], { state: String })
     case 3:
         await schema.create('state', { code: String })
+        schema.set('state', { code: 'MA', name: 'Massachusettes' })
+        schema.set('state', { code: 'NY', name: 'New York' })
+        schema.set('state', { code: 'SC', name: 'South Carolina' })
+        schema.set('state', { code: 'VA', name: 'Virginia' })
     }
+})
+```
+
+```javascript
+await memento.snapshot(async snapshot => {
+    const join = snapshot.cursor('president', [ 'Jackson', 'Andrew' ]).join('state', $ => [ $[0].state ])
+    const gathered = []
+    for await (const items of join) {
+        for (const item of items) {
+            gathered.push(item)
+        }
+    }
+    okay(gathered, [[{
+        firstName: 'Andrew', lastName: 'Jackson', state: 'SC'
+    }, {
+        code: 'SC', name: 'South Carolina'
+    }], [{
+        firstName: 'Thomas', lastName: 'Jefferson', state: 'VA'
+    }, {
+        code: 'VA', name: 'Virginia'
+    }], [{
+        firstName: 'James', lastName: 'Monroe', state: 'VA'
+    }, {
+        code: 'VA', name: 'Virginia'
+    }], [{
+        firstName: 'George', lastName: 'Washington', state: 'VA'
+    }, {
+        code: 'VA', name: 'Virginia'
+    }]], 'inner join')
 })
 ```
 
