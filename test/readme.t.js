@@ -30,7 +30,7 @@
 // Proof `okay` function to assert out statements in the readme. A Proof unit test
 // generally looks like this.
 
-require('proof')(13, async okay => {
+require('proof')(14, async okay => {
     const path = require('path')
     const fs = require('fs').promises
     const { coalesce } = require('extant')
