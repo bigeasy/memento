@@ -154,21 +154,21 @@ require('proof')(64, async okay => {
         }, async (schema) => {
             switch (schema.version.target) {
             case 1:
-                await schema.store('employee', { 'terms.0': Number })
-                await schema.index([ 'employee', 'moniker' ], {
+                await schema.create('employee', { 'terms.0': Number })
+                await schema.create([ 'employee', 'moniker' ], {
                     lastName: Memento.ASC, firstName: [ 'text' ]
                 })
                 await schema.rename('employee', 'president')
                 await schema.rename(['president', 'moniker' ], [ 'president', 'name' ])
                 break
             case 2:
-                await schema.store('state', { code: String })
+                await schema.create('state', { code: String })
                 for (const state of states) {
                     schema.set('state', state)
                 }
                 break
             case 3:
-                await schema.index([ 'president', 'state' ], { state: String })
+                await schema.create([ 'president', 'state' ], { state: String })
                 break
             case 4:
                 await schema.remove([ 'president', 'state' ])
@@ -570,13 +570,13 @@ require('proof')(64, async okay => {
         await memento.snapshot(async snapshot => {
             await snapshot.get([ 'president', 'name' ], [ 'Adams', 'John' ])
             const gathered = []
-            let select = snapshot.cursor('president').join('state', $ => [ $[0].state ])
+            const select = snapshot.cursor('president').join('state', $ => [ $[0].state ])
             for await (const items of select) {
                 for (const [ president, state ] of items) {
                     gathered.push([ president.lastName, state.name ])
                 }
             }
-            let expected = presidents.slice(0, 16).map(president => {
+            const expected = presidents.slice(0, 16).map(president => {
                 const name = states.filter(state => state.code == president.state).pop().name
                 return [ president.lastName,  name ]
             })
@@ -584,47 +584,54 @@ require('proof')(64, async okay => {
         })
 
         await memento.mutator(async mutator => {
-            const gathered = []
-            let select = mutator.cursor('president').join('state', $ => [ $[0].state ])
-            for await (const items of select) {
-                for (const [ president, state ] of items) {
-                    gathered.push([ president.lastName, state.name ])
+            {
+                const gathered = []
+                const select = mutator.cursor('president').join('state', $ => [ $[0].state ])
+                for await (const items of select) {
+                    for (const [ president, state ] of items) {
+                        gathered.push([ president.lastName, state.name ])
+                    }
                 }
+                const expected = presidents.slice(0, 16).map(president => {
+                    const name = states.filter(state => state.code == president.state).pop().name
+                    return [ president.lastName,  name ]
+                })
+                okay(gathered, expected, 'inner join stored')
+                mutator.set('president', presidents[16])
+                mutator.set('president', presidents[17])
+                gathered.length = 0
             }
-            let expected = presidents.slice(0, 16).map(president => {
-                const name = states.filter(state => state.code == president.state).pop().name
-                return [ president.lastName,  name ]
-            })
-            okay(gathered, expected, 'inner join stored')
-            mutator.set('president', presidents[16])
-            mutator.set('president', presidents[17])
-            gathered.length = 0
-            select = mutator.cursor('president').join('state', $ => [ $[0].state ])
-            for await (const items of select) {
-                memento.pages.purge(0)
-                for (const [ president, state ] of items) {
-                    gathered.push([ president.lastName, state.name ])
+            {
+                const gathered = []
+                const select = mutator.cursor('president').join('state', $ => [ $[0].state ])
+                for await (const items of select) {
+                    memento.pages.purge(0)
+                    for (const [ president, state ] of items) {
+                        gathered.push([ president.lastName, state.name ])
+                    }
                 }
+                const expected = presidents.slice(0, 18).map(president => {
+                    const name = states.filter(state => state.code == president.state).pop().name
+                    return [ president.lastName,  name ]
+                })
+                okay(gathered, expected, 'inner join appened records')
+                mutator.set('state', { code: 'OH', name: 'Ohio 2' })
             }
-            expected = presidents.slice(0, 18).map(president => {
-                const name = states.filter(state => state.code == president.state).pop().name
-                return [ president.lastName,  name ]
-            })
-            okay(gathered, expected, 'inner join appened records')
-            mutator.set('state', { code: 'OH', name: 'Ohio 2' })
-            gathered.length = 0
-            select = mutator.cursor('president').join('state', $ => [ $[0].state ])
-            for await (const items of select) {
-                memento.pages.purge(0)
-                for (const [ president, state ] of items) {
-                    gathered.push([ president.lastName, state.name ])
+            {
+                const gathered = []
+                const select = mutator.cursor('president').join('state', $ => [ $[0].state ])
+                for await (const items of select) {
+                    memento.pages.purge(0)
+                    for (const [ president, state ] of items) {
+                        gathered.push([ president.lastName, state.name ])
+                    }
                 }
+                const expected = presidents.slice(0, 17).map(president => {
+                    const name = states.filter(state => state.code == president.state).pop().name
+                    return [ president.lastName,  name ]
+                }).concat([ [ 'Grant', 'Ohio 2' ] ])
+                okay(gathered, expected, 'inner join target changed')
             }
-            expected = presidents.slice(0, 17).map(president => {
-                const name = states.filter(state => state.code == president.state).pop().name
-                return [ president.lastName,  name ]
-            }).concat([ [ 'Grant', 'Ohio 2' ] ])
-            okay(gathered, expected, 'inner join target changed')
         })
 
         await memento.mutator(async mutator => {
