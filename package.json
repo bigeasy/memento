@@ -35,7 +35,7 @@
                             "rescue":                       "7.0.0-alpha.19",
                             "satiate":                      "0.0.5",
                             "verbatim":                     "0.1.8",
-                            "whittle":                      "0.0.5"
+                            "whittle":                      "0.0.6"
     },
     "devDependencies":
     {
